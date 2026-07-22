@@ -1,0 +1,11 @@
+[core]
+	repositoryformatversion = 0
+	filemode = false
+	bare = true
+	ignorecase = true
+[user]
+	name = Codex
+	email = codex@example.local
+[remote "origin"]
+	url = https://github.com/weinsteinguillermo-beep/g-os.git
+	fetch = +refs/heads/*:refs/remotes/origin/*

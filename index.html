@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Prototipo frontend de Caseritas POS para ventas de productos congelados."
+    >
+    <title>Caseritas POS</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-loader" aria-hidden="true">
+      <div class="loader-card">
+        <div class="loader-mark">CO</div>
+        <div>
+          <strong>CASERITAS OS</strong>
+          <span>Preparando punto de venta</span>
+        </div>
+      </div>
+    </div>
+
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Punto de venta</p>
+        <h1>CASERITAS OS</h1>
+      </div>
+      <div class="header-status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        Datos locales
+      </div>
+    </header>
+
+    <main class="spa-shell">
+      <aside class="spa-sidebar" aria-label="Navegación principal">
+        <nav class="spa-nav" id="app-nav"></nav>
+      </aside>
+      <section class="spa-outlet" id="app-view" aria-live="polite"></section>
+    </main>
+
+    <script src="js/config.js" defer></script>
+    <script src="js/utils.js" defer></script>
+    <script src="js/api.js" defer></script>
+    <script src="js/pos.js" defer></script>
+    <script src="js/ui.js" defer></script>
+    <script src="js/router.js" defer></script>
+    <script src="js/main.js" defer></script>
+  </body>
+</html>

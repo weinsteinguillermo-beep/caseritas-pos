@@ -5,6 +5,7 @@ window.CaseritasViews = window.CaseritasViews || {};
 window.CaseritasViews.POS = {
   ui: null,
   searchDebounceTimer: null,
+  unsubscribeState: null,
 
   render() {
     return `
@@ -35,6 +36,15 @@ window.CaseritasViews.POS = {
           </form>
 
           <div class="message-area" id="message-area" role="status" aria-live="polite"></div>
+
+          <div class="message-area" aria-live="polite">
+            <div class="message warning" id="operation-status">Preparando estado operativo...</div>
+          </div>
+
+          <div class="field-row stacked">
+            <label for="customer-name">Cliente</label>
+            <input id="customer-name" type="text" maxlength="80" placeholder="Consumidor final">
+          </div>
 
           <div class="results-header">
             <h3>Catálogo local</h3>
@@ -160,11 +170,32 @@ window.CaseritasViews.POS = {
   },
 
   async init(context) {
-    const { api, pos } = context;
+    const { api, pos, appState } = context;
     const ui = new UI();
     this.ui = ui;
     const view = this;
     let lastRequestedSearch = null;
+    let chargeInFlight = false;
+    const operationStatus = document.querySelector("#operation-status");
+    const customerNameInput = document.querySelector("#customer-name");
+
+    function renderOperationalState(state) {
+      const caja =
+        state.caja && state.caja.estado === "abierta" && state.caja.confirmadaBackend
+          ? `Caja abierta: ${state.caja.nombre}`
+          : state.caja && state.caja.estado === "abierta"
+            ? "Caja pendiente de verificacion"
+            : "Caja cerrada";
+      const usuario = state.usuario ? `Cajero: ${state.usuario.nombre}` : "Sin cajero";
+      const servidor = state.estadoServidor === "offline" ? "Servidor no disponible" : "Servidor preparado";
+      operationStatus.textContent = `${servidor} · ${caja} · ${usuario}`;
+      operationStatus.className =
+        state.caja && state.caja.estado === "abierta" && state.caja.confirmadaBackend ? "message success" : "message warning";
+    }
+
+    if (appState) {
+      this.unsubscribeState = appState.subscribe(renderOperationalState);
+    }
 
     function currentTotals() {
       const discount = ui.getDiscountValue();
@@ -218,6 +249,9 @@ window.CaseritasViews.POS = {
 
       try {
         await pos.cargarProductos(safeSearch);
+        if (appState) {
+          appState.setServidor("online");
+        }
         ui.setLoading(false);
         ui.renderProducts(pos.products, addProductToCart);
 
@@ -225,6 +259,9 @@ window.CaseritasViews.POS = {
           ui.showMessage("");
         }
       } catch (error) {
+        if (appState && error.message === "Servidor no disponible") {
+          appState.setServidor("offline");
+        }
         lastRequestedSearch = null;
         pos.products = [];
         ui.setLoading(false);
@@ -321,10 +358,22 @@ window.CaseritasViews.POS = {
     }
 
     async function handleCharge() {
+      if (chargeInFlight) {
+        return;
+      }
+
       const discount = ui.getDiscountValue();
       const cashReceived = ui.getCashReceived();
+      let operationId = null;
 
       try {
+        const state = appState ? appState.snapshot() : null;
+
+        if (!state || !state.caja || state.caja.estado !== "abierta" || !state.caja.confirmadaBackend) {
+          ui.showMessage("Abrí caja y confirmá el estado del servidor para registrar ventas.", "error");
+          return;
+        }
+
         const error = pos.validarCobro(discount, cashReceived);
 
         if (error) {
@@ -332,21 +381,47 @@ window.CaseritasViews.POS = {
           return;
         }
 
+        chargeInFlight = true;
         ui.setLoading(true, "Registrando venta...");
-        await pos.cobrar(discount, cashReceived);
+        operationId = appState.beginSaleOperation("venta");
+        const payload = await pos.cobrarConMetadata(discount, cashReceived, {
+          operationId,
+          empresaId: state.empresa.id,
+          cajaId: state.caja.id,
+          cajaSesionId: state.caja.cajaSesionId,
+          usuarioId: state.usuario ? state.usuario.id : null,
+          customerName: CaseritasUtils.sanitizeText(customerNameInput.value) || "Consumidor final",
+        });
+        appState.setServidor("online");
+        appState.addVenta(payload);
+        appState.clearSaleOperation(operationId);
+        appState.addMovimientoCaja({
+          tipo: "Ingreso",
+          motivo: "Venta POS",
+          importe: payload.total,
+          metodoPago: payload.paymentMethod,
+        });
         ui.resetSaleControls();
+        customerNameInput.value = "";
         renderCart();
         await loadProducts("", { keepMessage: true, force: true });
-        ui.showMessage("Cobro confirmado. La venta quedó lista para una nueva operación.", "success");
+        ui.showMessage(`Cobro confirmado. Operación ${operationId}.`, "success");
         ui.clearSearch();
       } catch (error) {
+        if (appState && error.message === "Servidor no disponible") {
+          appState.setServidor("offline");
+        }
         ui.showMessage(CaseritasUtils.friendlyApiError(error), "error");
       } finally {
+        chargeInFlight = false;
         ui.setLoading(false);
       }
     }
 
     function handleClearSale() {
+      if (appState) {
+        appState.clearSaleOperation();
+      }
       pos.limpiarVenta();
       ui.resetSaleControls();
       renderCart();
@@ -375,6 +450,10 @@ window.CaseritasViews.POS = {
   destroy() {
     window.clearTimeout(this.searchDebounceTimer);
     this.searchDebounceTimer = null;
+    if (this.unsubscribeState) {
+      this.unsubscribeState();
+      this.unsubscribeState = null;
+    }
 
     if (this.ui) {
       this.ui.destroy();

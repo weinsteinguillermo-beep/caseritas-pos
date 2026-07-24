@@ -1,0 +1,437 @@
+{
+  "name": "Caseritas OS - caja-movimiento",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caja/movimiento",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-caja-movimiento",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "caseritas-caja-movimiento"
+    },
+    {
+      "parameters": {
+        "jsCode": "function fail(message){return [{json:{ok:false,message}}];}\nlet body; try { const raw=$json.body||$json; body=typeof raw==='string'?JSON.parse(raw):raw; } catch(e){ return fail('La solicitud no tiene formato valido.'); }\nconst operationId=String(body.operationId||'').trim(); const empresaId=String(body.empresaId||'').trim(); const usuarioId=String(body.usuarioId||'').trim(); const cajaSesionId=String(body.cajaSesionId||'').trim(); const tipo=String(body.tipo||'').trim().toUpperCase(); const importe=Number(body.importe||0); const motivo=String(body.motivo||'').trim();\nif(!operationId)return fail('Falta operationId.'); if(!empresaId)return fail('Falta empresaId.'); if(!usuarioId)return fail('Falta usuarioId.'); if(!cajaSesionId)return fail('Falta cajaSesionId.'); if(!['INGRESO','EGRESO'].includes(tipo))return fail('Tipo de movimiento invalido.'); if(!Number.isFinite(importe)||importe<=0)return fail('El importe debe ser mayor que cero.'); if(!motivo)return fail('Falta motivo.');\nconst esc=(v)=>String(v).replace(/\"/g,'\\\\\"');\nreturn [{json:{ok:true,operationId,empresaId,usuarioId,cajaSesionId,tipo,importe,motivo,fechaHora:body.fechaHora||new Date().toISOString(),duplicateFormula:'{operation_id} = \"'+esc(operationId)+'\"',sessionFormula:'AND(RECORD_ID() = \"'+esc(cajaSesionId)+'\", {estado} = \"ABIERTA\")'}}];"
+      },
+      "id": "validar",
+      "name": "Validar Movimiento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-valido",
+      "name": "Payload Valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_CAJA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$json.duplicateFormula}}",
+        "options": {}
+      },
+      "id": "buscar-duplicado",
+      "name": "Buscar OperationId",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        -120
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const validation=$items('Validar Movimiento')[0].json; const duplicate=$items('Buscar OperationId').find(item=>item.json&&item.json.id); if(duplicate){return [{json:{ok:true,decision:'duplicate',movimientoCajaId:duplicate.json.id,estado:'CONFIRMADO'}}];} return [{json:{...validation,decision:'create'}}];"
+      },
+      "id": "resolver",
+      "name": "Resolver Idempotencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.decision === \"create\"}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-crear",
+      "name": "Crear Movimiento?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "SESIONES_CAJA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$json.sessionFormula}}",
+        "options": {}
+      },
+      "id": "buscar-sesion",
+      "name": "Buscar Sesion Abierta",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        -240
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data=$items('Resolver Idempotencia')[0].json; const session=$items('Buscar Sesion Abierta').find(item=>item.json&&item.json.id); if(!session)return [{json:{ok:false,message:'La caja no esta abierta o no existe.'}}]; return [{json:{id:'mov-'+data.operationId,empresa_id:data.empresaId,caja_sesion_id:data.cajaSesionId,usuario_id:data.usuarioId,tipo:data.tipo,origen:'MANUAL',importe:data.importe,estado:'CONFIRMADO',motivo:data.motivo,operation_id:data.operationId,fecha_hora:data.fechaHora}}];"
+      },
+      "id": "preparar",
+      "name": "Preparar Movimiento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-preparado",
+      "name": "Movimiento Preparado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_CAJA",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "crear",
+      "name": "Crear Movimiento Caja",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        2160,
+        -360
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.error ? { ok:false, message:'No se pudo registrar el movimiento.' } : { ok:true, movimientoCajaId:$json.id, estado:'CONFIRMADO' } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2400,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok:false, message:$json.message || \"No se pudo registrar el movimiento.\" } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok:true, movimientoCajaId:$json.movimientoCajaId, estado:$json.estado } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-idempotencia",
+      "name": "Respond Idempotencia",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Movimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Movimiento": {
+      "main": [
+        [
+          {
+            "node": "Payload Valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Valido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar OperationId",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar OperationId": {
+      "main": [
+        [
+          {
+            "node": "Resolver Idempotencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver Idempotencia": {
+      "main": [
+        [
+          {
+            "node": "Crear Movimiento?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Movimiento?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Sesion Abierta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Idempotencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Sesion Abierta": {
+      "main": [
+        [
+          {
+            "node": "Preparar Movimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Movimiento": {
+      "main": [
+        [
+          {
+            "node": "Movimiento Preparado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Movimiento Preparado?": {
+      "main": [
+        [
+          {
+            "node": "Crear Movimiento Caja",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Movimiento Caja": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "caseritas-caja-movimiento-v1"
+}

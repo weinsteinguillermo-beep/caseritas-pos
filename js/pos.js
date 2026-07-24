@@ -11,6 +11,7 @@ class POS {
     this.cart = [];
     this.search = "";
     this.paymentMethod = "";
+    this.saleInFlight = false;
   }
 
   async cargarProductos(search = "") {
@@ -131,12 +132,20 @@ class POS {
     return "";
   }
 
-  ventaPayload(discountValue, cashReceived) {
+  ventaPayload(discountValue, cashReceived, metadata = {}) {
     const saleSubtotal = this.subtotal();
     const saleDiscountPercent = this.calcularDescuento(discountValue);
     const saleTotal = this.total(discountValue);
 
     return {
+      operationId: metadata.operationId,
+      empresaId: metadata.empresaId,
+      cajaId: metadata.cajaId,
+      cajaSesionId: metadata.cajaSesionId || metadata.cajaId,
+      cashier: metadata.usuarioId,
+      customerId: metadata.customerId || null,
+      customerName: metadata.customerName || "Consumidor final",
+      source: "pos",
       createdAt: CaseritasUtils.todayIso(),
       items: this.cart.map((item) => ({
         productId: item.product.id,
@@ -157,17 +166,43 @@ class POS {
   }
 
   async cobrar(discountValue, cashReceived) {
+    return await this.cobrarConMetadata(discountValue, cashReceived);
+  }
+
+  async cobrarConMetadata(discountValue, cashReceived, metadata = {}) {
+    if (this.saleInFlight) {
+      throw new Error("La venta ya se esta registrando. Espera la respuesta del servidor.");
+    }
+
     const error = this.validarCobro(discountValue, cashReceived);
 
     if (error) {
       throw new Error(error);
     }
 
-    const payload = this.ventaPayload(discountValue, cashReceived);
-    await this.api.createSale(payload);
+    const payload = this.ventaPayload(discountValue, cashReceived, metadata);
+    this.saleInFlight = true;
 
-    this.limpiarVenta();
-    return payload;
+    try {
+      const result = await this.api.createSale(payload);
+
+      if (result && (result.ventaId || result.id)) {
+        payload.id = result.ventaId || result.id;
+      }
+
+      if (result && result.operationId) {
+        payload.operationId = result.operationId;
+      }
+
+      if (result && Number.isFinite(Number(result.total))) {
+        payload.total = Number(result.total);
+      }
+
+      this.limpiarVenta();
+      return payload;
+    } finally {
+      this.saleInFlight = false;
+    }
   }
 
   limpiarVenta() {

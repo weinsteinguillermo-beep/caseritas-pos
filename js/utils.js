@@ -23,6 +23,15 @@ const CaseritasUtils = {
       .slice(0, 32);
   },
 
+  escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  },
+
   positiveNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) && number > 0 ? number : 0;
@@ -34,6 +43,14 @@ const CaseritasUtils = {
       currency: "UYU",
       maximumFractionDigits: 0,
     }).format(Math.max(0, Math.round(Number(value) || 0)));
+  },
+
+  signedMoney(value) {
+    return new Intl.NumberFormat("es-UY", {
+      style: "currency",
+      currency: "UYU",
+      maximumFractionDigits: 0,
+    }).format(Math.round(Number(value) || 0));
   },
 
   todayIso() {

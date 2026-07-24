@@ -1,0 +1,339 @@
+{
+  "name": "Caseritas OS - venta-detalle",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "venta/detalle",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-venta-detalle",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "caseritas-venta-detalle"
+    },
+    {
+      "parameters": {
+        "jsCode": "function fail(message){return [{json:{ok:false,message}}];}\nlet body; try{const raw=$json.body||$json; body=typeof raw==='string'?JSON.parse(raw):raw;}catch(e){return fail('La solicitud no tiene formato valido.');}\nconst empresaId=String(body.empresaId||'').trim(); const ventaId=String(body.ventaId||'').trim();\nif(!empresaId)return fail('Falta empresaId.'); if(!ventaId)return fail('Falta ventaId.');\nconst esc=(v)=>String(v).replace(/\"/g,'\\\\\"');\nreturn [{json:{ok:true,empresaId,ventaId,saleFormula:'AND(RECORD_ID() = \"'+esc(ventaId)+'\", {EmpresaId} = \"'+esc(empresaId)+'\")', detailFormula:'FIND(\"'+esc(ventaId)+'\", ARRAYJOIN({Venta}))', stockFormula:'FIND(\"'+esc(ventaId)+'\", ARRAYJOIN({Venta}))', cajaFormula:'{venta_id} = \"'+esc(ventaId)+'\"'}}];"
+      },
+      "id": "validar-detalle",
+      "name": "Validar Detalle",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-valido",
+      "name": "Payload Valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbleU4MHRm3Z2iRcY",
+          "mode": "id"
+        },
+        "filterByFormula": "={{$json.saleFormula}}",
+        "options": {}
+      },
+      "id": "buscar-venta",
+      "name": "Buscar Venta",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        -160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "DETALLE_VENTA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$items(\"Validar Detalle\")[0].json.detailFormula}}",
+        "options": {}
+      },
+      "id": "buscar-detalle",
+      "name": "Buscar Detalle",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        960,
+        -160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_STOCK",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$items(\"Validar Detalle\")[0].json.stockFormula}}",
+        "options": {}
+      },
+      "id": "buscar-stock",
+      "name": "Buscar Movimientos Stock",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1200,
+        -160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_CAJA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$items(\"Validar Detalle\")[0].json.cajaFormula}}",
+        "options": {}
+      },
+      "id": "buscar-caja",
+      "name": "Buscar Movimientos Caja",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        -160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const saleItem=$items('Buscar Venta').find(item=>item.json&&item.json.id); if(!saleItem)return [{json:{ok:false,message:'La venta no existe o no pertenece a la empresa.'}}];\nconst f=saleItem.json.fields||saleItem.json;\nconst detalle=$items('Buscar Detalle').filter(i=>i.json&&i.json.id).map(i=>{const d=i.json.fields||i.json; return {detalleId:i.json.id, productoId:Array.isArray(d.Producto)?d.Producto[0]:d.Producto, producto:d.ProductoNombre, codigoBarras:d.CodigoBarras, cantidad:Number(d.Cantidad||0), precioUnitario:Number(d.PrecioUnitario||0), totalLinea:Number(d.TotalLinea||0), estado:d.Estado};});\nconst movimientosStock=$items('Buscar Movimientos Stock').filter(i=>i.json&&i.json.id).map(i=>({movimientoStockId:i.json.id,...(i.json.fields||i.json)}));\nconst movimientosCaja=$items('Buscar Movimientos Caja').filter(i=>i.json&&i.json.id).map(i=>({movimientoCajaId:i.json.id,...(i.json.fields||i.json)}));\nreturn [{json:{ok:true,venta:{ventaId:saleItem.json.id,operationId:f.OperationId||'',empresaId:f.EmpresaId||'',usuarioId:f.UsuarioId||f.Cajero||'',cajaSesionId:f.CajaSesionId||'',fechaHora:f.Fecha||'',cliente:f.ClienteNombre||'Consumidor final',formaPago:f.MetodoPago||'',subtotal:Number(f.Subtotal||0),total:Number(f.Total||0),estado:String(f.Estado||'').toUpperCase(),anulacion:{operationId:f.AnulacionOperationId||'',motivo:f.MotivoAnulacion||'',usuarioId:f.AnuladoPor||'',fechaHora:f.FechaAnulacion||''}},detalle,movimientosStock,movimientosCaja}}];"
+      },
+      "id": "mapear-detalle",
+      "name": "Mapear Detalle",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1920,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok:false, message:$json.message || \"No se pudo consultar el detalle.\" } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        180
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Detalle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Detalle": {
+      "main": [
+        [
+          {
+            "node": "Payload Valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Valido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Venta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Venta": {
+      "main": [
+        [
+          {
+            "node": "Buscar Detalle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Detalle": {
+      "main": [
+        [
+          {
+            "node": "Buscar Movimientos Stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Movimientos Stock": {
+      "main": [
+        [
+          {
+            "node": "Buscar Movimientos Caja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Movimientos Caja": {
+      "main": [
+        [
+          {
+            "node": "Mapear Detalle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mapear Detalle": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "caseritas-venta-detalle-v1"
+}

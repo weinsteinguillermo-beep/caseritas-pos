@@ -1,0 +1,483 @@
+{
+  "name": "Caseritas OS - caja-cerrar",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caja/cerrar",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-caja-cerrar",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "caseritas-caja-cerrar"
+    },
+    {
+      "parameters": {
+        "jsCode": "function fail(message){return [{json:{ok:false,message}}];}\nlet body; try { const raw=$json.body||$json; body=typeof raw==='string'?JSON.parse(raw):raw; } catch(e){ return fail('La solicitud no tiene formato valido.'); }\nconst operationId=String(body.operationId||'').trim(); const empresaId=String(body.empresaId||'').trim(); const usuarioId=String(body.usuarioId||'').trim(); const cajaSesionId=String(body.cajaSesionId||'').trim(); const totalContado=Number(body.totalContado||0);\nif(!operationId)return fail('Falta operationId.'); if(!empresaId)return fail('Falta empresaId.'); if(!usuarioId)return fail('Falta usuarioId.'); if(!cajaSesionId)return fail('Falta cajaSesionId.'); if(!Number.isFinite(totalContado)||totalContado<0)return fail('Total contado invalido.');\nconst esc=(v)=>String(v).replace(/\"/g,'\\\\\"');\nreturn [{json:{ok:true,operationId,empresaId,usuarioId,cajaSesionId,totalContado,observaciones:String(body.observaciones||''),fechaHora:body.fechaHora||new Date().toISOString(),closeFormula:'{operation_id_cierre} = \"'+esc(operationId)+'\"',sessionFormula:'RECORD_ID() = \"'+esc(cajaSesionId)+'\"',movementFormula:'AND({caja_sesion_id} = \"'+esc(cajaSesionId)+'\", {estado} = \"CONFIRMADO\")'}}];"
+      },
+      "id": "validar",
+      "name": "Validar Cierre",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-valido",
+      "name": "Payload Valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "SESIONES_CAJA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$json.closeFormula}}",
+        "options": {}
+      },
+      "id": "buscar-cierre",
+      "name": "Buscar Cierre OperationId",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        -120
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const validation=$items('Validar Cierre')[0].json; const duplicate=$items('Buscar Cierre OperationId').find(item=>item.json&&item.json.id); if(duplicate){const f=duplicate.json.fields||duplicate.json; return [{json:{ok:true,decision:'duplicate',cajaSesionId:duplicate.json.id,estado:f.estado,totalEsperado:Number(f.total_esperado||0),totalContado:Number(f.total_contado||0),diferencia:Number(f.diferencia||0),fechaCierre:f.fecha_cierre}}];} return [{json:{...validation,decision:'close'}}];"
+      },
+      "id": "resolver",
+      "name": "Resolver Idempotencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.decision === \"close\"}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-cerrar",
+      "name": "Cerrar Caja?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "SESIONES_CAJA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$json.sessionFormula}}",
+        "options": {}
+      },
+      "id": "buscar-sesion",
+      "name": "Buscar Sesion",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        -240
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_CAJA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$json.movementFormula}}",
+        "options": {}
+      },
+      "id": "buscar-movs",
+      "name": "Buscar Movimientos Caja",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1680,
+        -240
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data=$items('Resolver Idempotencia')[0].json; const sessionItem=$items('Buscar Sesion').find(item=>item.json&&item.json.id); if(!sessionItem)return [{json:{ok:false,message:'La caja no existe.'}}]; const session=sessionItem.json.fields||sessionItem.json; if(session.estado !== 'ABIERTA') return [{json:{ok:false,message:'La caja ya esta cerrada.'}}]; if(String(session.usuario_id||'') !== data.usuarioId) return [{json:{ok:false,message:'No se puede cerrar una caja de otro usuario.'}}];\nconst moves=$items('Buscar Movimientos Caja').filter(item=>item.json&&item.json.id).map(item=>item.json.fields||item.json); const fondo=Number(session.fondo_inicial||0); const ingresos=moves.filter(m=>m.tipo==='INGRESO').reduce((s,m)=>s+Number(m.importe||0),0); const egresos=moves.filter(m=>m.tipo==='EGRESO').reduce((s,m)=>s+Number(m.importe||0),0); const totalEsperado=fondo+ingresos-egresos; const diferencia=data.totalContado-totalEsperado;\nreturn [{json:{id:data.cajaSesionId,estado:'CERRADA',fecha_cierre:data.fechaHora,total_esperado:totalEsperado,total_contado:data.totalContado,diferencia,observaciones:data.observaciones,operation_id_cierre:data.operationId}}];"
+      },
+      "id": "calcular",
+      "name": "Calcular Cierre",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-calculado",
+      "name": "Cierre Calculado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2160,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "SESIONES_CAJA",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{$json.id}}",
+            "estado": "CERRADA",
+            "fecha_cierre": "={{$json.fecha_cierre}}",
+            "total_esperado": "={{$json.total_esperado}}",
+            "total_contado": "={{$json.total_contado}}",
+            "diferencia": "={{$json.diferencia}}",
+            "observaciones": "={{$json.observaciones}}",
+            "operation_id_cierre": "={{$json.operation_id_cierre}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "actualizar",
+      "name": "Actualizar Sesion Caja",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        2400,
+        -360
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.error ? { ok:false, message:'No se pudo cerrar la caja.' } : { ok:true, cajaSesionId:$json.id, estado:'CERRADA', totalEsperado:Number($json.fields?.total_esperado || $json.total_esperado || 0), totalContado:Number($json.fields?.total_contado || $json.total_contado || 0), diferencia:Number($json.fields?.diferencia || $json.diferencia || 0), fechaCierre:$json.fields?.fecha_cierre || $json.fecha_cierre } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2640,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok:false, message:$json.message || \"No se pudo cerrar la caja.\" } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok:true, cajaSesionId:$json.cajaSesionId, estado:$json.estado, totalEsperado:$json.totalEsperado, totalContado:$json.totalContado, diferencia:$json.diferencia, fechaCierre:$json.fechaCierre } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-idempotencia",
+      "name": "Respond Idempotencia",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Cierre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Cierre": {
+      "main": [
+        [
+          {
+            "node": "Payload Valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Valido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Cierre OperationId",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Cierre OperationId": {
+      "main": [
+        [
+          {
+            "node": "Resolver Idempotencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver Idempotencia": {
+      "main": [
+        [
+          {
+            "node": "Cerrar Caja?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cerrar Caja?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Sesion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Idempotencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Sesion": {
+      "main": [
+        [
+          {
+            "node": "Buscar Movimientos Caja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Movimientos Caja": {
+      "main": [
+        [
+          {
+            "node": "Calcular Cierre",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Cierre": {
+      "main": [
+        [
+          {
+            "node": "Cierre Calculado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cierre Calculado?": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Sesion Caja",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Sesion Caja": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "caseritas-caja-cerrar-v1"
+}

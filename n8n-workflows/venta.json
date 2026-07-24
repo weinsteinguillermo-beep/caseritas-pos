@@ -1,5 +1,5 @@
 {
-  "name": "Caseritas POS - Registrar venta",
+  "name": "Caseritas POS - Motor de Ventas",
   "nodes": [
     {
       "parameters": {
@@ -12,18 +12,176 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "webhookId": "caseritas-venta"
     },
     {
       "parameters": {
-        "jsCode": "const raw = $json.body || $json;\nconst sale = typeof raw === 'string' ? JSON.parse(raw) : raw;\nif (!Array.isArray(sale.items) || sale.items.length === 0) {\n  throw new Error('La venta no tiene productos.');\n}\nif (!sale.paymentMethod) {\n  throw new Error('Selecciona un metodo de pago.');\n}\nconst total = Number(sale.total || 0);\nif (!Number.isFinite(total) || total <= 0) {\n  throw new Error('El total de la venta no es valido.');\n}\nreturn [{\n  json: {\n    Fecha: sale.createdAt || new Date().toISOString(),\n    MetodoPago: sale.paymentMethod,\n    Subtotal: Number(sale.subtotal || 0),\n    DescuentoPorcentaje: Number(sale.discountPercent || 0),\n    DescuentoImporte: Number(sale.discountAmount || 0),\n    Total: total,\n    EfectivoRecibido: Number(sale.cashReceived || 0),\n    ItemsJSON: JSON.stringify(sale.items),\n    Estado: 'Registrada'\n  }\n}];"
+        "jsCode": "function fail(message, details = []) {\n  return [{ json: { ok: false, status: 'Rechazada', message, details } }];\n}\n\nlet sale;\ntry {\n  const raw = $json.body || $json;\n  sale = typeof raw === 'string' ? JSON.parse(raw) : raw;\n} catch (error) {\n  return fail('La venta no tiene un formato valido.');\n}\n\nconst operationId = String(sale.operationId || `pos-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);\nconst items = Array.isArray(sale.items) ? sale.items : [];\nconst paymentMethod = String(sale.paymentMethod || '').trim();\nconst allowedPayments = ['cash', 'card', 'transfer'];\n\nif (items.length === 0) return fail('La venta no tiene productos.');\nif (!allowedPayments.includes(paymentMethod)) return fail('Selecciona un metodo de pago valido.');\n\nconst normalizedItems = [];\nfor (const item of items) {\n  const quantity = Number(item.quantity || 0);\n  const unitPrice = Number(item.unitPrice || 0);\n  const productId = String(item.productId || '').trim();\n  if (!productId) return fail('Hay un producto sin identificador.');\n  if (!Number.isFinite(quantity) || quantity <= 0) return fail('Hay un producto con cantidad invalida.');\n  if (!Number.isFinite(unitPrice) || unitPrice < 0) return fail('Hay un producto con precio invalido.');\n  normalizedItems.push({\n    productId,\n    name: String(item.name || ''),\n    barcode: String(item.barcode || ''),\n    unitPrice,\n    weight: Number(item.weight || 0),\n    quantity,\n    lineTotal: unitPrice * quantity\n  });\n}\n\nconst subtotal = normalizedItems.reduce((sum, item) => sum + item.lineTotal, 0);\nconst discountPercent = Math.min(100, Math.max(0, Number(sale.discountPercent || 0)));\nconst discountAmount = subtotal * (discountPercent / 100);\nconst total = subtotal - discountAmount;\nconst clientTotal = Number(sale.total || 0);\nconst cashReceived = Number(sale.cashReceived || 0);\n\nif (Math.abs(clientTotal - total) > 1) return fail('El total de la venta no coincide con el calculo del servidor.');\nif (paymentMethod === 'cash' && cashReceived < total) return fail('El efectivo recibido no alcanza para cubrir el total.');\nif (total <= 0) return fail('El total de la venta debe ser mayor a cero.');\n\nconst productFormula = `OR(${normalizedItems.map(item => `RECORD_ID() = \"${item.productId.replace(/\"/g, '\\\\\"')}\"`).join(', ')})`;\nconst duplicateFormula = `{OperationId} = \"${operationId.replace(/\"/g, '\\\\\"')}\"`;\n\nreturn [{\n  json: {\n    ok: true,\n    operationId,\n    sale: {\n      createdAt: sale.createdAt || new Date().toISOString(),\n      customerId: sale.customerId || null,\n      customerName: sale.customerName || 'Consumidor final',\n      paymentMethod,\n      cashReceived,\n      subtotal,\n      discountPercent,\n      discountAmount,\n      total,\n      cashier: sale.cashier || null,\n      cajaSesionId: sale.cajaSesionId || sale.cajaId || null,\n      empresaId: sale.empresaId || null,\n      source: sale.source || 'pos',\n      items: normalizedItems\n    },\n    duplicateFormula,\n    productFormula\n  }\n}];"
       },
-      "id": "validacion-venta",
-      "name": "Validacion",
+      "id": "validar-payload",
+      "name": "Validar Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [240, 0]
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-payload-valido",
+      "name": "Payload Valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbleU4MHRm3Z2iRcY",
+          "mode": "id"
+        },
+        "filterByFormula": "={{$json.duplicateFormula}}",
+        "options": {}
+      },
+      "id": "buscar-venta-operationid",
+      "name": "Buscar Venta OperationId",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        -120
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const validation = $items('Validar Payload')[0].json;\nconst duplicate = $items('Buscar Venta OperationId').find(item => item.json && item.json.id);\n\nif (!duplicate) {\n  return [{ json: { ...validation, decision: 'create' } }];\n}\n\nconst fields = duplicate.json.fields || duplicate.json;\nconst estado = fields.Estado || '';\nconst total = Number(fields.Total || validation.sale.total || 0);\n\nif (String(estado).toUpperCase() === 'CONFIRMADA') {\n  return [{ json: { ok: true, decision: 'duplicate-confirmed', operationId: validation.operationId, ventaId: duplicate.json.id, total, message: 'Venta ya registrada anteriormente.' } }];\n}\n\nreturn [{ json: { ok: false, decision: 'duplicate-blocked', operationId: validation.operationId, ventaId: duplicate.json.id, total, status: estado || 'Pendiente', message: 'Ya existe una venta con este OperationId y no se creara un duplicado.' } }];"
+      },
+      "id": "resolver-idempotencia",
+      "name": "Resolver Idempotencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.decision}}",
+              "operation": "equal",
+              "value2": "create"
+            }
+          ]
+        }
+      },
+      "id": "if-crear-venta",
+      "name": "Crear Venta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblyBp7gm4Lheqr7s",
+          "mode": "id"
+        },
+        "filterByFormula": "={{$json.productFormula}}",
+        "options": {}
+      },
+      "id": "buscar-productos",
+      "name": "Buscar Productos",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        -240
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const validation = $items('Resolver Idempotencia')[0].json;\nconst sale = validation.sale;\nconst products = $items('Buscar Productos').filter(item => item.json && item.json.id);\nconst productMap = new Map(products.map(item => [item.json.id, item.json.fields || item.json]));\nconst errors = [];\nconst detailRows = [];\nconst stockRows = [];\nconst stockUpdates = [];\nconst serverItems = [];\n\nfunction number(value, fallback = 0) {\n  const parsed = Number(value);\n  return Number.isFinite(parsed) ? parsed : fallback;\n}\n\nfunction textValue(value) {\n  if (value && typeof value === 'object' && 'text' in value) return String(value.text || '');\n  return String(value || '');\n}\n\nfor (const item of sale.items) {\n  const record = productMap.get(item.productId);\n  if (!record) {\n    errors.push({ productId: item.productId, message: 'Producto no encontrado.' });\n    continue;\n  }\n\n  const stockBefore = number(record['Stock Actual']);\n  const serverPrice = number(record.Importe, number(record['Precio x Kg']));\n  const quantity = number(item.quantity);\n\n  if (!Number.isFinite(stockBefore) || stockBefore <= 0) {\n    errors.push({ productId: item.productId, available: stockBefore, requested: quantity, message: 'Producto sin stock disponible.' });\n    continue;\n  }\n\n  if (stockBefore < quantity) {\n    errors.push({ productId: item.productId, available: stockBefore, requested: quantity, message: 'Stock insuficiente.' });\n    continue;\n  }\n\n  if (!Number.isFinite(serverPrice) || serverPrice <= 0) {\n    errors.push({ productId: item.productId, message: 'Producto sin precio valido.' });\n    continue;\n  }\n\n  const productName = String(record.Name || item.name || 'Producto');\n  const barcode = textValue(record['Codigo de Barras'] || item.barcode);\n  const weight = number(record.Peso, number(item.weight));\n  const lineTotal = serverPrice * quantity;\n  const stockAfter = stockBefore - quantity;\n\n  serverItems.push({ ...item, name: productName, barcode, unitPrice: serverPrice, weight, lineTotal });\n  detailRows.push({ Venta: null, OperationId: validation.operationId, Producto: [item.productId], ProductoNombre: productName, CodigoBarras: barcode, Cantidad: quantity, PrecioUnitario: serverPrice, Peso: weight, SubtotalLinea: lineTotal, DescuentoLinea: 0, TotalLinea: lineTotal, StockAntes: stockBefore, StockDespues: stockAfter, Estado: 'ACTIVO', Fecha: sale.createdAt });\n  stockRows.push({ OperationId: validation.operationId, Fecha: sale.createdAt, Producto: [item.productId], ProductoNombre: productName, Tipo: 'VENTA', Cantidad: -quantity, StockAntes: stockBefore, StockDespues: stockAfter, Motivo: 'Venta POS', Origen: 'POS', Venta: null, DetalleVenta: null, Responsable: sale.cashier || '', Estado: 'ACTIVO', Notas: '' });\n  stockUpdates.push({ id: item.productId, fields: { 'Stock Actual': stockAfter }, stockBefore, stockAfter });\n}\n\nif (errors.length > 0) {\n  return [{ json: { ok: false, operationId: validation.operationId, status: 'Rechazada', message: 'No se pudo validar la venta.', details: errors } }];\n}\n\nconst subtotal = serverItems.reduce((sum, item) => sum + item.lineTotal, 0);\nconst discountAmount = subtotal * (sale.discountPercent / 100);\nconst total = subtotal - discountAmount;\n\nif (Math.abs(Number(sale.subtotal) - subtotal) > 1 || Math.abs(Number(sale.total) - total) > 1) {\n  return [{ json: { ok: false, operationId: validation.operationId, status: 'Rechazada', message: 'El total de la venta no coincide con los precios actuales del servidor.' } }];\n}\n\nsale.items = serverItems;\nsale.subtotal = subtotal;\nsale.discountAmount = discountAmount;\nsale.total = total;\n\nreturn [{ json: { ok: true, operationId: validation.operationId, sale, detailRows, stockRows, stockUpdates } }];"
+      },
+      "id": "validar-stock-y-totales",
+      "name": "Validar Stock y Totales",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-venta-valida",
+      "name": "Venta Valida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst sale = data.sale;\nreturn [{ json: {\n  OperationId: data.operationId,\n  EmpresaId: sale.empresaId || '',\n  UsuarioId: sale.cashier || '',\n  CajaSesionId: sale.cajaSesionId || '',\n  Fecha: sale.createdAt,\n  Cliente: sale.customerId ? [sale.customerId] : undefined,\n  ClienteNombre: sale.customerName || 'Consumidor final',\n  MetodoPago: sale.paymentMethod,\n  Subtotal: sale.subtotal,\n  DescuentoPorcentaje: sale.discountPercent,\n  DescuentoImporte: sale.discountAmount,\n  Total: sale.total,\n  EfectivoRecibido: sale.cashReceived,\n  Vuelto: sale.paymentMethod === 'cash' ? Math.max(0, sale.cashReceived - sale.total) : 0,\n  Estado: 'PENDIENTE',\n  Cajero: sale.cashier || '',\n  Origen: sale.source || 'pos',\n  ErrorMensaje: '',\n  Notas: ''\n} }];"
+      },
+      "id": "preparar-venta-pendiente",
+      "name": "Preparar Venta Pendiente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        -360
+      ]
     },
     {
       "parameters": {
@@ -44,21 +202,28 @@
         },
         "options": {}
       },
-      "id": "airtable-venta",
-      "name": "Airtable",
+      "id": "crear-venta-pendiente",
+      "name": "Crear Venta Pendiente",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [480, 0]
+      "position": [
+        2400,
+        -360
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
-        "jsCode": "const venta = $items('Validacion')[0].json;\nconst ventaCreada = $items('Airtable')[0].json;\nreturn [{\n  json: {\n    Fecha: venta.Fecha,\n    Tipo: 'Ingreso',\n    Concepto: 'Venta POS',\n    MetodoPago: venta.MetodoPago,\n    Importe: venta.Total,\n    VentaId: ventaCreada.id,\n    Estado: 'Confirmado'\n  }\n}];"
+        "jsCode": "const saleData = $items('Validar Stock y Totales')[0].json;\nconst saleRecord = $items('Crear Venta Pendiente')[0].json;\nif (!saleRecord || saleRecord.error || !saleRecord.id) {\n  return [{ json: { ok: false, step: 'Crear Venta Pendiente', operationId: saleData.operationId, message: 'No se pudo crear la venta pendiente.', created: {}, stockUpdates: [] } }];\n}\nreturn saleData.detailRows.map(row => ({ json: { ...row, Venta: [saleRecord.id] } }));"
       },
-      "id": "preparar-caja",
-      "name": "Preparar Caja",
+      "id": "preparar-detalle",
+      "name": "Preparar Detalle",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [720, 0]
+      "position": [
+        2640,
+        -360
+      ]
     },
     {
       "parameters": {
@@ -70,7 +235,178 @@
         },
         "table": {
           "__rl": true,
-          "value": "tblkRxqoxwCZiLiVl",
+          "value": "DETALLE_VENTA",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "crear-detalle-venta",
+      "name": "Crear Detalle Venta",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        2880,
+        -360
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const saleData = $items('Validar Stock y Totales')[0].json;\nconst saleRecord = $items('Crear Venta Pendiente')[0].json;\nconst detailItems = $items('Crear Detalle Venta');\nconst detailRecords = detailItems.filter(item => item.json && item.json.id && !item.json.error);\nif (detailRecords.length !== saleData.detailRows.length) {\n  return [{ json: { ok: false, step: 'Crear Detalle Venta', operationId: saleData.operationId, ventaId: saleRecord.id, message: 'No se pudo crear todo el detalle de venta.', created: { ventaId: saleRecord.id, detailIds: detailRecords.map(item => item.json.id) }, stockUpdates: [] } }];\n}\nreturn saleData.stockRows.map((row, index) => ({ json: { ...row, Venta: [saleRecord.id], DetalleVenta: [detailRecords[index].json.id] } }));"
+      },
+      "id": "preparar-movimientos-stock",
+      "name": "Preparar Movimientos Stock",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_STOCK",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "crear-movimientos-stock",
+      "name": "Crear Movimientos Stock",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        3360,
+        -360
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const saleData = $items('Validar Stock y Totales')[0].json;\nconst saleRecord = $items('Crear Venta Pendiente')[0].json;\nconst detailRecords = $items('Crear Detalle Venta').filter(item => item.json && item.json.id && !item.json.error);\nconst stockRecords = $items('Crear Movimientos Stock').filter(item => item.json && item.json.id && !item.json.error);\nif (stockRecords.length !== saleData.stockRows.length) {\n  return [{ json: { ok: false, step: 'Crear Movimientos Stock', operationId: saleData.operationId, ventaId: saleRecord.id, message: 'No se pudieron crear todos los movimientos de stock.', created: { ventaId: saleRecord.id, detailIds: detailRecords.map(item => item.json.id), stockMovementIds: stockRecords.map(item => item.json.id) }, stockUpdates: [] } }];\n}\nreturn saleData.stockUpdates.map(update => ({ json: { id: update.id, 'Stock Actual': update.fields['Stock Actual'], stockBefore: update.stockBefore, stockAfter: update.stockAfter } }));"
+      },
+      "id": "preparar-actualizacion-stock",
+      "name": "Preparar Actualizacion Stock",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblyBp7gm4Lheqr7s",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{$json.id}}",
+            "Stock Actual": "={{$json['Stock Actual']}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "actualizar-stock-produccion",
+      "name": "Actualizar Stock Produccion",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        3840,
+        -360
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const saleData = $items('Validar Stock y Totales')[0].json;\nconst saleRecord = $items('Crear Venta Pendiente')[0].json;\nconst updated = $items('Actualizar Stock Produccion').filter(item => item.json && item.json.id && !item.json.error);\nif (updated.length !== saleData.stockUpdates.length) {\n  return [{ json: { ok: false, step: 'Actualizar Stock Produccion', operationId: saleData.operationId, ventaId: saleRecord.id, message: 'No se pudo actualizar todo el stock. Se intentara restaurar el stock anterior.', created: { ventaId: saleRecord.id }, stockUpdates: saleData.stockUpdates } }];\n}\nconst sale = saleData.sale;\nif (!sale.cajaSesionId) {\n  return [{ json: { ok: false, step: 'Validar Caja', operationId: saleData.operationId, ventaId: saleRecord.id, message: 'La venta no tiene sesion de caja confirmada.', created: { ventaId: saleRecord.id }, stockUpdates: saleData.stockUpdates } }];\n}\nreturn [{ json: { id: 'mov-' + saleData.operationId, empresa_id: sale.empresaId || '', caja_sesion_id: sale.cajaSesionId, usuario_id: sale.cashier || '', venta_id: saleRecord.id, tipo: 'INGRESO', origen: 'VENTA', importe: sale.total, estado: 'ACTIVO', motivo: 'Venta POS', operation_id: saleData.operationId, fecha_hora: sale.createdAt } }];"
+      },
+      "id": "preparar-caja",
+      "name": "Preparar Caja",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4080,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_CAJA",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "crear-caja",
+      "name": "Crear Movimiento Caja",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        4320,
+        -360
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const saleData = $items('Validar Stock y Totales')[0].json;\nconst saleRecord = $items('Crear Venta Pendiente')[0].json;\nconst cajaRecord = $items('Crear Movimiento Caja')[0].json;\nif (!cajaRecord || cajaRecord.error || !cajaRecord.id) {\n  return [{ json: { ok: false, step: 'Crear Movimiento Caja', operationId: saleData.operationId, ventaId: saleRecord.id, message: 'No se pudo crear el movimiento de caja. Se intentara restaurar el stock anterior.', created: { ventaId: saleRecord.id }, stockUpdates: saleData.stockUpdates } }];\n}\nreturn [{ json: { id: saleRecord.id, Estado: 'CONFIRMADA', CajaMovimiento: [cajaRecord.id], FechaConfirmacion: new Date().toISOString(), ErrorMensaje: '' } }];"
+      },
+      "id": "preparar-confirmacion",
+      "name": "Preparar Confirmacion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4560,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbleU4MHRm3Z2iRcY",
           "mode": "id"
         },
         "columns": {
@@ -79,44 +415,996 @@
         },
         "options": {}
       },
-      "id": "airtable-caja",
-      "name": "Airtable Caja",
+      "id": "confirmar-venta",
+      "name": "Confirmar Venta",
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [960, 0]
+      "position": [
+        4800,
+        -360
+      ],
+      "continueOnFail": true
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { ok: true, id: $items('Airtable')[0].json.id, cajaId: $items('Airtable Caja')[0].json.id, message: 'Venta registrada correctamente.' } }}",
+        "responseBody": "={{ { ok: true, ventaId: $json.ventaId, operationId: $json.operationId, total: $json.total } }}",
         "options": {
           "responseHeaders": {
             "entries": [
-              { "name": "Access-Control-Allow-Origin", "value": "*" },
-              { "name": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
-              { "name": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
             ]
           }
         }
       },
-      "id": "respond-venta",
-      "name": "Respond to Webhook",
+      "id": "respond-success",
+      "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1200, 0]
+      "position": [
+        5520,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, operationId: $json.operationId, status: $json.status || 'Rechazada', message: $json.message, details: $json.details || [] } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: $json.ok, ventaId: $json.ventaId, operationId: $json.operationId, total: $json.total, message: $json.message, status: $json.status } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-idempotencia",
+      "name": "Respond Idempotencia",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const failed = $json;\nconst operationId = failed.operationId || 'sin-operation-id';\nconst stockUpdates = Array.isArray(failed.stockUpdates) ? failed.stockUpdates : [];\nconst cajaMovimientoId = failed.cajaMovimientoId || failed.created?.cajaMovimientoId || null;\nconst errorMessage = (failed.step || 'Error') + ': ' + (failed.message || 'Error durante la venta');\nreturn [{ json: { ok: false, operationId, rollbackStatus: stockUpdates.length > 0 || cajaMovimientoId ? 'CompensacionPendiente' : 'RollbackPendiente', message: failed.message || 'La venta no pudo completarse. Revisar operacion en n8n.', failedStep: failed.step || 'desconocido', ventaId: failed.ventaId || failed.created?.ventaId || null, cajaMovimientoId, stockUpdates, errorFields: { Estado: 'RollbackPendiente', ErrorMensaje: errorMessage } } }];"
+      },
+      "id": "preparar-rollback",
+      "name": "Preparar Rollback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4320,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbleU4MHRm3Z2iRcY",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{$json.id}}",
+            "Estado": "ERROR",
+            "ErrorMensaje": "={{$json.ErrorMensaje}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "marcar-venta-rollback",
+      "name": "Marcar Venta Rollback",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        6480,
+        -80
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, operationId: $items('Preparar Rollback')[0].json.operationId, status: 'RollbackPendiente', ventaId: $items('Preparar Rollback')[0].json.ventaId, message: $items('Preparar Rollback')[0].json.message, failedStep: $items('Preparar Rollback')[0].json.failedStep } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-rollback",
+      "name": "Respond Rollback",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        6720,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-detalle-preparado",
+      "name": "Detalle Preparado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2760,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-movimientos-stock-preparados",
+      "name": "Movimientos Stock Preparados?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3240,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-actualizacion-stock-preparada",
+      "name": "Actualizacion Stock Preparada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3720,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-caja-preparada",
+      "name": "Caja Preparada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        4200,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-confirmacion-preparada",
+      "name": "Confirmacion Preparada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        4680,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const saleData = $items('Validar Stock y Totales')[0].json;\nconst saleRecord = $items('Crear Venta Pendiente')[0].json;\nconst cajaRecord = $items('Crear Movimiento Caja')[0].json;\nconst confirmation = $items('Confirmar Venta')[0].json;\nif (!confirmation || confirmation.error || !confirmation.id) {\n  return [{ json: { ok: false, step: 'Confirmar Venta', operationId: saleData.operationId, ventaId: saleRecord.id, message: 'La venta no pudo confirmarse despues de escribir caja. Se intentara compensar stock y caja.', created: { ventaId: saleRecord.id, cajaMovimientoId: cajaRecord && cajaRecord.id ? cajaRecord.id : null }, stockUpdates: saleData.stockUpdates } }];\n}\nreturn [{ json: { ok: true, ventaId: saleRecord.id, operationId: saleData.operationId, total: saleData.sale.total } }];"
+      },
+      "id": "preparar-respuesta-final",
+      "name": "Preparar Respuesta Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5040,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-confirmacion-exitosa",
+      "name": "Confirmacion Exitosa?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        5280,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rollback = $items('Preparar Rollback')[0].json;\nconst stockUpdates = Array.isArray(rollback.stockUpdates) ? rollback.stockUpdates : [];\nif (stockUpdates.length === 0) {\n  return [{ json: { ok: true, skipStockRestore: true, operationId: rollback.operationId, ventaId: rollback.ventaId } }];\n}\nreturn stockUpdates.map(update => ({ json: { id: update.id, 'Stock Actual': update.stockBefore, operationId: rollback.operationId, ventaId: rollback.ventaId } }));"
+      },
+      "id": "preparar-restaurar-stock",
+      "name": "Preparar Restaurar Stock",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4560,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblyBp7gm4Lheqr7s",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{$json.id}}",
+            "Stock Actual": "={{$json['Stock Actual']}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "restaurar-stock-produccion",
+      "name": "Restaurar Stock Produccion",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        5040,
+        -80
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{!$json.skipStockRestore}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-restaurar-stock",
+      "name": "Restaurar Stock?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        4800,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rollback = $items('Preparar Rollback')[0].json;\nif (!rollback.cajaMovimientoId) {\n  return [{ json: { ok: true, skipCajaCancel: true, operationId: rollback.operationId, ventaId: rollback.ventaId } }];\n}\nreturn [{ json: { id: rollback.cajaMovimientoId, estado: 'ANULADO', motivo: 'Anulado automaticamente por rollback de venta ' + rollback.operationId, operationId: rollback.operationId, ventaId: rollback.ventaId } }];"
+      },
+      "id": "preparar-anular-caja",
+      "name": "Preparar Anular Caja",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5280,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{!$json.skipCajaCancel}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-anular-caja",
+      "name": "Anular Caja?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        5520,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_CAJA",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{$json.id}}",
+            "estado": "ANULADO",
+            "motivo": "={{$json.motivo}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "anular-caja-rollback",
+      "name": "Anular Caja Rollback",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        5760,
+        -160
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const rollback = $items('Preparar Rollback')[0].json;\nif (!rollback.ventaId) {\n  return [{ json: { skipVentaRollback: true, operationId: rollback.operationId } }];\n}\nreturn [{ json: { id: rollback.ventaId, Estado: 'ERROR', ErrorMensaje: rollback.errorFields?.ErrorMensaje || rollback.message || 'Rollback pendiente', operationId: rollback.operationId } }];"
+      },
+      "id": "preparar-marcar-venta-rollback",
+      "name": "Preparar Marcar Venta Rollback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6000,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{!$json.skipVentaRollback}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-marcar-venta-rollback",
+      "name": "Marcar Venta Rollback?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        6240,
+        20
+      ]
     }
   ],
   "connections": {
-    "Webhook": { "main": [[{ "node": "Validacion", "type": "main", "index": 0 }]] },
-    "Validacion": { "main": [[{ "node": "Airtable", "type": "main", "index": 0 }]] },
-    "Airtable": { "main": [[{ "node": "Preparar Caja", "type": "main", "index": 0 }]] },
-    "Preparar Caja": { "main": [[{ "node": "Airtable Caja", "type": "main", "index": 0 }]] },
-    "Airtable Caja": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Payload": {
+      "main": [
+        [
+          {
+            "node": "Payload Valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Valido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Venta OperationId",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Venta OperationId": {
+      "main": [
+        [
+          {
+            "node": "Resolver Idempotencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver Idempotencia": {
+      "main": [
+        [
+          {
+            "node": "Crear Venta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Venta?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Productos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Idempotencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Productos": {
+      "main": [
+        [
+          {
+            "node": "Validar Stock y Totales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Stock y Totales": {
+      "main": [
+        [
+          {
+            "node": "Venta Valida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Venta Valida?": {
+      "main": [
+        [
+          {
+            "node": "Preparar Venta Pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Venta Pendiente": {
+      "main": [
+        [
+          {
+            "node": "Crear Venta Pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Venta Pendiente": {
+      "main": [
+        [
+          {
+            "node": "Preparar Detalle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Detalle": {
+      "main": [
+        [
+          {
+            "node": "Detalle Preparado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detalle Preparado?": {
+      "main": [
+        [
+          {
+            "node": "Crear Detalle Venta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Detalle Venta": {
+      "main": [
+        [
+          {
+            "node": "Preparar Movimientos Stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Movimientos Stock": {
+      "main": [
+        [
+          {
+            "node": "Movimientos Stock Preparados?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Movimientos Stock Preparados?": {
+      "main": [
+        [
+          {
+            "node": "Crear Movimientos Stock",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Movimientos Stock": {
+      "main": [
+        [
+          {
+            "node": "Preparar Actualizacion Stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Actualizacion Stock": {
+      "main": [
+        [
+          {
+            "node": "Actualizacion Stock Preparada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizacion Stock Preparada?": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Stock Produccion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Stock Produccion": {
+      "main": [
+        [
+          {
+            "node": "Preparar Caja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Caja": {
+      "main": [
+        [
+          {
+            "node": "Caja Preparada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Caja Preparada?": {
+      "main": [
+        [
+          {
+            "node": "Crear Movimiento Caja",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Confirmacion": {
+      "main": [
+        [
+          {
+            "node": "Confirmacion Preparada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmacion Preparada?": {
+      "main": [
+        [
+          {
+            "node": "Confirmar Venta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar Venta": {
+      "main": [
+        [
+          {
+            "node": "Preparar Respuesta Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Respuesta Final": {
+      "main": [
+        [
+          {
+            "node": "Confirmacion Exitosa?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmacion Exitosa?": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Rollback": {
+      "main": [
+        [
+          {
+            "node": "Preparar Restaurar Stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Restaurar Stock": {
+      "main": [
+        [
+          {
+            "node": "Restaurar Stock?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restaurar Stock Produccion": {
+      "main": [
+        [
+          {
+            "node": "Preparar Anular Caja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar Venta Rollback": {
+      "main": [
+        [
+          {
+            "node": "Respond Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restaurar Stock?": {
+      "main": [
+        [
+          {
+            "node": "Restaurar Stock Produccion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Anular Caja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Anular Caja": {
+      "main": [
+        [
+          {
+            "node": "Anular Caja?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anular Caja?": {
+      "main": [
+        [
+          {
+            "node": "Anular Caja Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Marcar Venta Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anular Caja Rollback": {
+      "main": [
+        [
+          {
+            "node": "Preparar Marcar Venta Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Marcar Venta Rollback": {
+      "main": [
+        [
+          {
+            "node": "Marcar Venta Rollback?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar Venta Rollback?": {
+      "main": [
+        [
+          {
+            "node": "Marcar Venta Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Movimiento Caja": {
+      "main": [
+        [
+          {
+            "node": "Preparar Confirmacion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "pinData": {},
   "settings": {
     "executionOrder": "v1"
   },
   "active": false,
-  "versionId": "caseritas-venta-v1"
+  "versionId": "caseritas-venta-engine-v1"
 }

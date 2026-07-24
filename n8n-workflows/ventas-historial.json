@@ -1,0 +1,289 @@
+{
+  "name": "Caseritas OS - ventas-historial",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ventas/historial",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-ventas-historial",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "caseritas-ventas-historial"
+    },
+    {
+      "parameters": {
+        "jsCode": "function fail(message){return [{json:{ok:false,message}}];}\nlet body; try { const raw=$json.body||$json; body=typeof raw==='string'?JSON.parse(raw):raw; } catch(e){ return fail('La solicitud no tiene formato valido.'); }\nconst empresaId=String(body.empresaId||'').trim();\nif(!empresaId)return fail('Falta empresaId.');\nconst esc=(v)=>String(v).replace(/\"/g,'\\\\\"');\nconst conditions=['{EmpresaId} = \"'+esc(empresaId)+'\"'];\nif(body.usuarioId) conditions.push('{UsuarioId} = \"'+esc(body.usuarioId)+'\"');\nif(body.cajaSesionId) conditions.push('{CajaSesionId} = \"'+esc(body.cajaSesionId)+'\"');\nif(body.estado) conditions.push('{Estado} = \"'+esc(String(body.estado).toUpperCase())+'\"');\nif(body.fechaDesde) conditions.push('IS_AFTER({Fecha}, \"'+esc(body.fechaDesde)+'\")');\nif(body.fechaHasta) conditions.push('IS_BEFORE({Fecha}, \"'+esc(body.fechaHasta)+'\")');\nconst term=String(body.busqueda||'').trim();\nif(term){ const t=esc(term.toLowerCase()); conditions.push('OR(FIND(\"'+t+'\", LOWER({OperationId}&\"\")), FIND(\"'+t+'\", LOWER({ClienteNombre}&\"\")), FIND(\"'+t+'\", LOWER(RECORD_ID()&\"\")))'); }\nreturn [{json:{ok:true,formula:'AND('+conditions.join(',')+')'}}];"
+      },
+      "id": "validar-historial",
+      "name": "Validar Historial",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-valido",
+      "name": "Payload Valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbleU4MHRm3Z2iRcY",
+          "mode": "id"
+        },
+        "filterByFormula": "={{$json.formula}}",
+        "options": {}
+      },
+      "id": "buscar-ventas",
+      "name": "Buscar Ventas",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        -120
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const ventas=$items('Buscar Ventas').filter(item=>item.json&&item.json.id);\nif(ventas.length===0)return [{json:{ok:true,ventas:[],detailFormula:'FALSE()'}}];\nconst ids=ventas.map(item=>item.json.id);\nconst or=ids.map(id=>'FIND(\"'+id+'\", ARRAYJOIN({Venta}))').join(',');\nreturn [{json:{ok:true,ventaIds:ids,detailFormula:'OR('+or+')'}}];"
+      },
+      "id": "preparar-detalle",
+      "name": "Preparar Detalle",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "DETALLE_VENTA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$json.detailFormula}}",
+        "options": {}
+      },
+      "id": "buscar-detalle",
+      "name": "Buscar Detalle Venta",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1200,
+        -120
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const ventaItems=$items('Buscar Ventas').filter(item=>item.json&&item.json.id);\nconst detailItems=$items('Buscar Detalle Venta').filter(item=>item.json&&item.json.id);\nconst detailsBySale=new Map();\nfor(const item of detailItems){ const f=item.json.fields||item.json; const ventaRef=Array.isArray(f.Venta)?f.Venta[0]:String(f.Venta||''); if(!detailsBySale.has(ventaRef))detailsBySale.set(ventaRef,[]); detailsBySale.get(ventaRef).push({ detalleId:item.json.id, productoId:Array.isArray(f.Producto)?f.Producto[0]:f.Producto, producto:f.ProductoNombre, codigoBarras:f.CodigoBarras, cantidad:Number(f.Cantidad||0), precioUnitario:Number(f.PrecioUnitario||0), totalLinea:Number(f.TotalLinea||0), estado:f.Estado }); }\nconst ventas=ventaItems.map(item=>{ const f=item.json.fields||item.json; return { ventaId:item.json.id, operationId:f.OperationId||'', empresaId:f.EmpresaId||'', usuarioId:f.UsuarioId||f.Cajero||'', cajaSesionId:f.CajaSesionId||'', fechaHora:f.Fecha||'', cliente:f.ClienteNombre||'Consumidor final', formaPago:f.MetodoPago||'', subtotal:Number(f.Subtotal||0), total:Number(f.Total||0), estado:String(f.Estado||'').toUpperCase(), detalle:detailsBySale.get(item.json.id)||[] }; });\nventas.sort((a,b)=>new Date(b.fechaHora||0)-new Date(a.fechaHora||0));\nreturn [{json:{ok:true,ventas}}];"
+      },
+      "id": "mapear-historial",
+      "name": "Mapear Historial",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1680,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok:false, message:$json.message || \"No se pudo consultar el historial.\" } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        180
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Historial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Historial": {
+      "main": [
+        [
+          {
+            "node": "Payload Valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Valido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Ventas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Ventas": {
+      "main": [
+        [
+          {
+            "node": "Preparar Detalle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Detalle": {
+      "main": [
+        [
+          {
+            "node": "Buscar Detalle Venta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Detalle Venta": {
+      "main": [
+        [
+          {
+            "node": "Mapear Historial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mapear Historial": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "caseritas-ventas-historial-v1"
+}

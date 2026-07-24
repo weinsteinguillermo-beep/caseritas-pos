@@ -1,0 +1,1083 @@
+{
+  "name": "Caseritas OS - venta-anular",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "venta/anular",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-venta-anular",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "caseritas-venta-anular"
+    },
+    {
+      "parameters": {
+        "jsCode": "function fail(message){return [{json:{ok:false,message}}];}\nlet body; try{const raw=$json.body||$json; body=typeof raw==='string'?JSON.parse(raw):raw;}catch(e){return fail('La solicitud no tiene formato valido.');}\nconst operationId=String(body.operationId||'').trim(); const empresaId=String(body.empresaId||'').trim(); const usuarioId=String(body.usuarioId||'').trim(); const cajaSesionId=String(body.cajaSesionId||'').trim(); const ventaId=String(body.ventaId||'').trim(); const motivo=String(body.motivo||'').trim();\nif(!operationId)return fail('Falta operationId.'); if(!empresaId)return fail('Falta empresaId.'); if(!usuarioId)return fail('Falta usuarioId.'); if(!ventaId)return fail('Falta ventaId.'); if(!motivo)return fail('El motivo es obligatorio.');\nconst esc=(v)=>String(v).replace(/\"/g,'\\\\\"');\nreturn [{json:{ok:true,operationId,empresaId,usuarioId,cajaSesionId,ventaId,motivo,fechaHora:body.fechaHora||new Date().toISOString(),duplicateFormula:'{AnulacionOperationId} = \"'+esc(operationId)+'\"',saleFormula:'AND(RECORD_ID() = \"'+esc(ventaId)+'\", {EmpresaId} = \"'+esc(empresaId)+'\")',stockFormula:'AND(FIND(\"'+esc(ventaId)+'\", ARRAYJOIN({Venta})), {Tipo} = \"VENTA\", {Estado} = \"ACTIVO\")',cajaFormula:'AND({venta_id} = \"'+esc(ventaId)+'\", {origen} = \"VENTA\", {estado} = \"ACTIVO\")'}}];"
+      },
+      "id": "validar-anulacion",
+      "name": "Validar Anulacion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-valido",
+      "name": "Payload Valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbleU4MHRm3Z2iRcY",
+          "mode": "id"
+        },
+        "filterByFormula": "={{$json.duplicateFormula}}",
+        "options": {}
+      },
+      "id": "buscar-duplicado",
+      "name": "Buscar Anulacion OperationId",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        -220
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const validation=$items('Validar Anulacion')[0].json;\nconst dup=$items('Buscar Anulacion OperationId').find(i=>i.json&&i.json.id);\nif(dup){\n  const f=dup.json.fields||dup.json;\n  const estado=String(f.Estado||'').toUpperCase();\n  if(estado==='ANULADA') return [{json:{ok:true,decision:'duplicate',ventaId:dup.json.id,operationId:validation.operationId,estado,message:'Venta ya anulada anteriormente.'}}];\n  return [{json:{ok:false,decision:'duplicate-pending',ventaId:dup.json.id,operationId:validation.operationId,estado:estado||'ANULACION_PENDIENTE',message:'La anulacion ya existe y esta pendiente de reconciliacion.'}}];\n}\nreturn [{json:{...validation,decision:'create'}}];"
+      },
+      "id": "resolver-idempotencia",
+      "name": "Resolver Idempotencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.decision === \"create\"}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-crear",
+      "name": "Crear Anulacion?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbleU4MHRm3Z2iRcY",
+          "mode": "id"
+        },
+        "filterByFormula": "={{$json.saleFormula}}",
+        "options": {}
+      },
+      "id": "buscar-venta",
+      "name": "Buscar Venta",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        -340
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data=$items('Resolver Idempotencia')[0].json; const sale=$items('Buscar Venta').find(i=>i.json&&i.json.id); if(!sale)return [{json:{ok:false,message:'La venta no existe o no pertenece a la empresa.'}}]; const f=sale.json.fields||sale.json; const estado=String(f.Estado||'').toUpperCase(); if(estado!=='CONFIRMADA')return [{json:{ok:false,message:'Solo se pueden anular ventas confirmadas.'}}]; if(f.AnulacionOperationId)return [{json:{ok:false,message:'La venta ya tiene una anulacion registrada.'}}]; if(data.cajaSesionId && f.CajaSesionId && data.cajaSesionId!==f.CajaSesionId)return [{json:{ok:false,message:'La venta pertenece a otra sesion de caja.'}}]; return [{json:{...data,total:Number(f.Total||0),formaPago:f.MetodoPago||'',saleFields:f}}];"
+      },
+      "id": "validar-venta",
+      "name": "Validar Venta Anulable",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-anulable",
+      "name": "Venta Anulable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        -340
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_STOCK",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$items(\"Validar Anulacion\")[0].json.stockFormula}}",
+        "options": {}
+      },
+      "id": "buscar-stock",
+      "name": "Buscar Stock Original",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        2880,
+        -580
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data=$items('Validar Venta Anulable')[0].json; const stock=$items('Buscar Stock Original').filter(i=>i.json&&i.json.id); if(stock.length===0)return [{json:{ok:false,message:'No se encontraron movimientos de stock activos para anular.'}}]; const ids=[...new Set(stock.map(i=>{const f=i.json.fields||i.json; return Array.isArray(f.Producto)?f.Producto[0]:f.Producto;}).filter(Boolean))]; const formula='OR('+ids.map(id=>'RECORD_ID() = \"'+id+'\"').join(',')+')'; return [{json:{...data,productFormula:formula}}];"
+      },
+      "id": "preparar-productos",
+      "name": "Preparar Productos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-productos",
+      "name": "Productos Preparados?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3360,
+        -580
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblyBp7gm4Lheqr7s",
+          "mode": "id"
+        },
+        "filterByFormula": "={{$json.productFormula}}",
+        "options": {}
+      },
+      "id": "buscar-productos",
+      "name": "Buscar Productos",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        3600,
+        -700
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data=$items('Preparar Productos')[0].json; const stock=$items('Buscar Stock Original').filter(i=>i.json&&i.json.id); const products=$items('Buscar Productos').filter(i=>i.json&&i.json.id); const productMap=new Map(products.map(i=>[i.json.id,i.json.fields||i.json])); const rows=[]; const updates=[]; for(const item of stock){const f=item.json.fields||item.json; const productId=Array.isArray(f.Producto)?f.Producto[0]:f.Producto; const product=productMap.get(productId); if(!product)return [{json:{ok:false,message:'No se pudo leer el producto para restaurar stock.'}}]; const qty=Math.abs(Number(f.Cantidad||0)); const before=Number(product['Stock Actual']||0); const after=before+qty; rows.push({OperationId:data.operationId,Fecha:data.fechaHora,Producto:[productId],ProductoNombre:f.ProductoNombre||product.Name,Tipo:'ANULACION',Cantidad:qty,StockAntes:before,StockDespues:after,Motivo:data.motivo,Origen:'ANULACION',Venta:[data.ventaId],Responsable:data.usuarioId,Estado:'COMPENSATORIO',Notas:'Anula movimiento '+item.json.id}); updates.push({id:productId,'Stock Actual':after}); } return rows.map((row,idx)=>({json:{...row,stockUpdate:updates[idx]}}));"
+      },
+      "id": "preparar-inversos-stock",
+      "name": "Preparar Inversos Stock",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        -700
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-stock-inverso",
+      "name": "Stock Inverso Preparado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        4080,
+        -700
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_STOCK",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "crear-stock-inverso",
+      "name": "Crear Movimientos Stock Inversos",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        4320,
+        -820
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const created=$items('Crear Movimientos Stock Inversos').filter(i=>i.json&&i.json.id&&!i.json.error); const prepared=$items('Preparar Inversos Stock'); if(created.length!==prepared.length)return [{json:{ok:false,message:'No se pudieron crear todos los movimientos inversos de stock.'}}]; return prepared.map(i=>({json:i.json.stockUpdate}));"
+      },
+      "id": "preparar-actualizar-stock",
+      "name": "Preparar Actualizar Stock",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4560,
+        -820
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-update-stock",
+      "name": "Actualizacion Stock Preparada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        4800,
+        -820
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblyBp7gm4Lheqr7s",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{$json.id}}",
+            "Stock Actual": "={{$json[\"Stock Actual\"]}}"
+          }
+        },
+        "options": {}
+      },
+      "id": "actualizar-stock",
+      "name": "Restaurar Stock Actual",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        5040,
+        -940
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_CAJA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$items(\"Validar Venta Anulable\")[0].json.cajaFormula}}",
+        "options": {}
+      },
+      "id": "buscar-caja",
+      "name": "Buscar Movimiento Caja Original",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        5280,
+        -940
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data=$items('Validar Venta Anulable')[0].json; const original=$items('Buscar Movimiento Caja Original').find(i=>i.json&&i.json.id); if(!original)return [{json:{ok:false,message:'No se encontro movimiento de caja original.'}}]; const f=original.json.fields||original.json; return [{json:{id:'mov-anulacion-'+data.operationId,empresa_id:data.empresaId,caja_sesion_id:data.cajaSesionId||f.caja_sesion_id,usuario_id:data.usuarioId,venta_id:data.ventaId,tipo:'EGRESO',origen:'ANULACION',importe:Number(f.importe||data.total||0),estado:'COMPENSATORIO',motivo:data.motivo,operation_id:data.operationId,fecha_hora:data.fechaHora}}];"
+      },
+      "id": "preparar-caja-inversa",
+      "name": "Preparar Caja Inversa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5520,
+        -940
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-caja-inversa",
+      "name": "Caja Inversa Preparada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        5760,
+        -940
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "MOVIMIENTOS_CAJA",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "crear-caja-inversa",
+      "name": "Crear Movimiento Caja Inverso",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        6000,
+        -1060
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data=$items('Validar Venta Anulable')[0].json; const caja=$items('Crear Movimiento Caja Inverso')[0].json; const stockUpdates=$items('Restaurar Stock Actual').filter(i=>i.json&&i.json.id&&!i.json.error); if(!caja||caja.error||!caja.id)return [{json:{ok:false,message:'No se pudo crear movimiento inverso de caja.'}}]; if(stockUpdates.length===0)return [{json:{ok:false,message:'No se pudo restaurar stock.'}}]; return [{json:{id:data.ventaId,Estado:'ANULADA',AnulacionOperationId:data.operationId,AnuladoPor:data.usuarioId,MotivoAnulacion:data.motivo,FechaAnulacion:data.fechaHora}}];"
+      },
+      "id": "preparar-marcar-anulada",
+      "name": "Preparar Marcar Venta Anulada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6240,
+        -1060
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-marcar",
+      "name": "Venta Marcable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        6480,
+        -1060
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbleU4MHRm3Z2iRcY",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "marcar-anulada",
+      "name": "Marcar Venta Anulada",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        6720,
+        -1180
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.error ? { ok:false, status:'ERROR_ANULACION', message:'No se pudo marcar la venta como anulada.' } : { ok:true, ventaId:$json.id, operationId:$json.fields?.AnulacionOperationId || $json.AnulacionOperationId, estado:'ANULADA' } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        6960,
+        -1180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok:false, status:$json.status || \"ERROR_ANULACION\", message:$json.message || \"No se pudo anular la venta.\" } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok:true, ventaId:$json.ventaId, operationId:$json.operationId, estado:$json.estado, message:$json.message } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-idem",
+      "name": "Respond Idempotencia",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data=$items('Validar Venta Anulable')[0].json;\nreturn [{json:{id:data.ventaId,Estado:'ANULACION_PENDIENTE',AnulacionOperationId:data.operationId,AnuladoPor:data.usuarioId,MotivoAnulacion:data.motivo,FechaAnulacion:data.fechaHora}}];"
+      },
+      "id": "preparar-anulacion-pendiente",
+      "name": "Preparar Anulacion Pendiente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbleU4MHRm3Z2iRcY",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "marcar-anulacion-pendiente",
+      "name": "Marcar Anulacion Pendiente",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        2400,
+        -460
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{!$json.error && !!$json.id}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-pendiente-marcada",
+      "name": "Anulacion Pendiente Marcada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        -460
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Anulacion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Anulacion": {
+      "main": [
+        [
+          {
+            "node": "Payload Valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Valido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Anulacion OperationId",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Anulacion OperationId": {
+      "main": [
+        [
+          {
+            "node": "Resolver Idempotencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver Idempotencia": {
+      "main": [
+        [
+          {
+            "node": "Crear Anulacion?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Anulacion?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Venta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Idempotencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Venta": {
+      "main": [
+        [
+          {
+            "node": "Validar Venta Anulable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Venta Anulable": {
+      "main": [
+        [
+          {
+            "node": "Venta Anulable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Venta Anulable?": {
+      "main": [
+        [
+          {
+            "node": "Preparar Anulacion Pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Stock Original": {
+      "main": [
+        [
+          {
+            "node": "Preparar Productos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Productos": {
+      "main": [
+        [
+          {
+            "node": "Productos Preparados?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Productos Preparados?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Productos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Productos": {
+      "main": [
+        [
+          {
+            "node": "Preparar Inversos Stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Inversos Stock": {
+      "main": [
+        [
+          {
+            "node": "Stock Inverso Preparado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stock Inverso Preparado?": {
+      "main": [
+        [
+          {
+            "node": "Crear Movimientos Stock Inversos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Movimientos Stock Inversos": {
+      "main": [
+        [
+          {
+            "node": "Preparar Actualizar Stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Actualizar Stock": {
+      "main": [
+        [
+          {
+            "node": "Actualizacion Stock Preparada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizacion Stock Preparada?": {
+      "main": [
+        [
+          {
+            "node": "Restaurar Stock Actual",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restaurar Stock Actual": {
+      "main": [
+        [
+          {
+            "node": "Buscar Movimiento Caja Original",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Movimiento Caja Original": {
+      "main": [
+        [
+          {
+            "node": "Preparar Caja Inversa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Caja Inversa": {
+      "main": [
+        [
+          {
+            "node": "Caja Inversa Preparada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Caja Inversa Preparada?": {
+      "main": [
+        [
+          {
+            "node": "Crear Movimiento Caja Inverso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Movimiento Caja Inverso": {
+      "main": [
+        [
+          {
+            "node": "Preparar Marcar Venta Anulada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Marcar Venta Anulada": {
+      "main": [
+        [
+          {
+            "node": "Venta Marcable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Venta Marcable?": {
+      "main": [
+        [
+          {
+            "node": "Marcar Venta Anulada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar Venta Anulada": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Anulacion Pendiente": {
+      "main": [
+        [
+          {
+            "node": "Marcar Anulacion Pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar Anulacion Pendiente": {
+      "main": [
+        [
+          {
+            "node": "Anulacion Pendiente Marcada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anulacion Pendiente Marcada?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Stock Original",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "caseritas-venta-anular-v1"
+}

@@ -1,0 +1,228 @@
+{
+  "name": "Caseritas OS - caja-estado",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caja/estado",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-caja-estado",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "caseritas-caja-estado"
+    },
+    {
+      "parameters": {
+        "jsCode": "let body;\ntry { const raw = $json.body || $json.query || $json; body = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { body = {}; }\nconst empresaId = String(body.empresaId || '').trim();\nconst usuarioId = String(body.usuarioId || '').trim();\nconst cajaId = String(body.cajaId || '').trim();\nif (!empresaId || !usuarioId || !cajaId) return [{ json: { ok: false, message: 'Faltan datos para consultar caja.' } }];\nconst esc = (value) => String(value).replace(/\"/g, '\\\\\"');\nreturn [{ json: { ok: true, formula: 'AND({empresa_id} = \"' + esc(empresaId) + '\", {usuario_id} = \"' + esc(usuarioId) + '\", {caja_id} = \"' + esc(cajaId) + '\", {estado} = \"ABIERTA\")' } }];"
+      },
+      "id": "validar",
+      "name": "Validar Consulta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-valido",
+      "name": "Payload Valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "SESIONES_CAJA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$json.formula}}",
+        "options": {}
+      },
+      "id": "buscar-abierta",
+      "name": "Buscar Sesion Abierta",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        -120
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const open = $items('Buscar Sesion Abierta').find(item => item.json && item.json.id);\nif (!open) return [{ json: { ok: true, abierta: false } }];\nconst fields = open.json.fields || open.json;\nreturn [{ json: { ok: true, abierta: true, cajaSesionId: open.json.id, fondoInicial: Number(fields.fondo_inicial || 0), fechaApertura: fields.fecha_apertura } }];"
+      },
+      "id": "mapear",
+      "name": "Mapear Estado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond",
+      "name": "Respond Estado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok:false, message:$json.message } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Consulta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Consulta": {
+      "main": [
+        [
+          {
+            "node": "Payload Valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Valido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Sesion Abierta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Sesion Abierta": {
+      "main": [
+        [
+          {
+            "node": "Mapear Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mapear Estado": {
+      "main": [
+        [
+          {
+            "node": "Respond Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "caseritas-caja-estado-v1"
+}

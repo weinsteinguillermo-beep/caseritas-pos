@@ -1,0 +1,437 @@
+{
+  "name": "Caseritas OS - caja-abrir",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caja/abrir",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-caja-abrir",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "caseritas-caja-abrir"
+    },
+    {
+      "parameters": {
+        "jsCode": "function fail(message) { return [{ json: { ok: false, message } }]; }\nlet body;\ntry {\n  const raw = $json.body || $json;\n  body = typeof raw === 'string' ? JSON.parse(raw) : raw;\n} catch (error) {\n  return fail('La solicitud no tiene formato valido.');\n}\nconst operationId = String(body.operationId || '').trim();\nconst empresaId = String(body.empresaId || '').trim();\nconst usuarioId = String(body.usuarioId || '').trim();\nconst cajaId = String(body.cajaId || '').trim();\nconst fondoInicial = Number(body.fondoInicial || 0);\nif (!operationId) return fail('Falta operationId.');\nif (!empresaId) return fail('Falta empresaId.');\nif (!usuarioId) return fail('Falta usuarioId.');\nif (!cajaId) return fail('Falta cajaId.');\nif (!Number.isFinite(fondoInicial) || fondoInicial < 0) return fail('El fondo inicial debe ser mayor o igual a cero.');\nconst esc = (value) => String(value).replace(/\"/g, '\\\\\"');\nreturn [{ json: { ok: true, operationId, empresaId, usuarioId, cajaId, fondoInicial, fechaHora: body.fechaHora || new Date().toISOString(), duplicateFormula: '{operation_id_apertura} = \"' + esc(operationId) + '\"', openFormula: 'AND({empresa_id} = \"' + esc(empresaId) + '\", {usuario_id} = \"' + esc(usuarioId) + '\", {caja_id} = \"' + esc(cajaId) + '\", {estado} = \"ABIERTA\")' } }];"
+      },
+      "id": "validar",
+      "name": "Validar Apertura",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-valido",
+      "name": "Payload Valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "SESIONES_CAJA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$json.duplicateFormula}}",
+        "options": {}
+      },
+      "id": "buscar-duplicado",
+      "name": "Buscar OperationId",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        -120
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const validation = $items('Validar Apertura')[0].json;\nconst duplicate = $items('Buscar OperationId').find(item => item.json && item.json.id);\nif (duplicate) {\n  const fields = duplicate.json.fields || duplicate.json;\n  return [{ json: { ok: true, decision: 'duplicate', cajaSesionId: duplicate.json.id, estado: fields.estado || 'ABIERTA', fondoInicial: Number(fields.fondo_inicial || validation.fondoInicial), fechaApertura: fields.fecha_apertura } }];\n}\nreturn [{ json: { ...validation, decision: 'create' } }];"
+      },
+      "id": "resolver-duplicado",
+      "name": "Resolver Idempotencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.decision === \"create\"}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-crear",
+      "name": "Crear Apertura?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "SESIONES_CAJA",
+          "mode": "name"
+        },
+        "filterByFormula": "={{$json.openFormula}}",
+        "options": {}
+      },
+      "id": "buscar-abierta",
+      "name": "Buscar Caja Abierta",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        -240
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $items('Resolver Idempotencia')[0].json;\nconst alreadyOpen = $items('Buscar Caja Abierta').find(item => item.json && item.json.id);\nif (alreadyOpen) return [{ json: { ok: false, message: 'Ya existe una caja abierta para este usuario y caja.', cajaSesionId: alreadyOpen.json.id } }];\nreturn [{ json: { id: 'sesion-' + data.operationId, empresa_id: data.empresaId, caja_id: data.cajaId, usuario_id: data.usuarioId, estado: 'ABIERTA', fondo_inicial: data.fondoInicial, fecha_apertura: data.fechaHora, operation_id_apertura: data.operationId } }];"
+      },
+      "id": "preparar-sesion",
+      "name": "Preparar Sesion Caja",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.ok !== false}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-sesion-ok",
+      "name": "Sesion Preparada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "SESIONES_CAJA",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "crear-sesion",
+      "name": "Crear Sesion Caja",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        2160,
+        -360
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.error ? { ok:false, message:'No se pudo abrir la caja.' } : { ok: true, cajaSesionId: $json.id, estado: 'ABIERTA', fondoInicial: Number($json.fields?.fondo_inicial || $json.fondo_inicial || 0), fechaApertura: $json.fields?.fecha_apertura || $json.fecha_apertura } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2400,
+        -360
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, message: $json.message || \"No se pudo abrir la caja.\" } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, cajaSesionId: $json.cajaSesionId, estado: $json.estado, fondoInicial: $json.fondoInicial, fechaApertura: $json.fechaApertura } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-idempotencia",
+      "name": "Respond Idempotencia",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar Apertura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Apertura": {
+      "main": [
+        [
+          {
+            "node": "Payload Valido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Valido?": {
+      "main": [
+        [
+          {
+            "node": "Buscar OperationId",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar OperationId": {
+      "main": [
+        [
+          {
+            "node": "Resolver Idempotencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver Idempotencia": {
+      "main": [
+        [
+          {
+            "node": "Crear Apertura?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Apertura?": {
+      "main": [
+        [
+          {
+            "node": "Buscar Caja Abierta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Idempotencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Caja Abierta": {
+      "main": [
+        [
+          {
+            "node": "Preparar Sesion Caja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Sesion Caja": {
+      "main": [
+        [
+          {
+            "node": "Sesion Preparada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sesion Preparada?": {
+      "main": [
+        [
+          {
+            "node": "Crear Sesion Caja",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Sesion Caja": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "caseritas-caja-abrir-v1"
+}

@@ -78,6 +78,14 @@ async function request(path, options = {}) {
   }
 }
 
+function assertOk(payload, fallbackMessage) {
+  if (payload && payload.ok === false) {
+    throw new Error(payload.message || fallbackMessage);
+  }
+
+  return payload;
+}
+
 function normalizeProducts(payload) {
   const products = (() => {
   if (Array.isArray(payload)) {
@@ -212,7 +220,7 @@ export async function createSale(data) {
   return await request("/venta", {
     method: "POST",
     body: data,
-  });
+  }).then((payload) => assertOk(payload, "No se pudo registrar la venta."));
 }
 
 export async function getCustomers(text = "") {
@@ -221,6 +229,65 @@ export async function getCustomers(text = "") {
   });
 
   return normalizeCustomers(payload);
+}
+
+export async function openCashSession(data) {
+  return await request("/caja/abrir", {
+    method: "POST",
+    body: data,
+  }).then((payload) => assertOk(payload, "No se pudo abrir la caja."));
+}
+
+export async function getCashStatus(data = {}) {
+  return await request("/caja/estado", {
+    method: "POST",
+    body: data,
+  }).then((payload) => assertOk(payload, "No se pudo consultar el estado de caja."));
+}
+
+export async function closeCashSession(data) {
+  return await request("/caja/cerrar", {
+    method: "POST",
+    body: data,
+  }).then((payload) => assertOk(payload, "No se pudo cerrar la caja."));
+}
+
+export async function createCashMovement(data) {
+  return await request("/caja/movimiento", {
+    method: "POST",
+    body: data,
+  }).then((payload) => assertOk(payload, "No se pudo registrar el movimiento de caja."));
+}
+
+export async function getSalesHistory(filters = {}) {
+  const payload = await request("/ventas/historial", {
+    method: "POST",
+    body: filters,
+  }).then((response) => assertOk(response, "No se pudo consultar el historial."));
+
+  if (Array.isArray(payload?.ventas)) {
+    return payload.ventas;
+  }
+
+  return [];
+}
+
+export async function getSaleDetail(data = {}) {
+  return await request("/venta/detalle", {
+    method: "POST",
+    body: data,
+  }).then((payload) => assertOk(payload, "No se pudo consultar el detalle de la venta."));
+}
+
+export async function voidSale(data = {}) {
+  return await request("/venta/anular", {
+    method: "POST",
+    body: data,
+  }).then((payload) => assertOk(payload, "No se pudo anular la venta."));
+}
+
+export async function getDailySales(params = {}) {
+  return await getSalesHistory(params);
 }
 
 class CaseritasAPI {
@@ -238,6 +305,38 @@ class CaseritasAPI {
 
   async getCustomers(text = "") {
     return await getCustomers(text);
+  }
+
+  async openCashSession(data) {
+    return await openCashSession(data);
+  }
+
+  async getCashStatus(data = {}) {
+    return await getCashStatus(data);
+  }
+
+  async closeCashSession(data) {
+    return await closeCashSession(data);
+  }
+
+  async createCashMovement(data) {
+    return await createCashMovement(data);
+  }
+
+  async getSalesHistory(filters = {}) {
+    return await getSalesHistory(filters);
+  }
+
+  async getSaleDetail(data = {}) {
+    return await getSaleDetail(data);
+  }
+
+  async voidSale(data = {}) {
+    return await voidSale(data);
+  }
+
+  async getDailySales(params = {}) {
+    return await getDailySales(params);
   }
 
   async buscarProductos(text = "") {
@@ -267,4 +366,12 @@ window.CaseritasApiClient = {
   getProductByBarcode,
   createSale,
   getCustomers,
+  openCashSession,
+  getCashStatus,
+  closeCashSession,
+  createCashMovement,
+  getSalesHistory,
+  getSaleDetail,
+  voidSale,
+  getDailySales,
 };

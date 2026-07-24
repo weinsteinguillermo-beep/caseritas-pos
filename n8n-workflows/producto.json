@@ -1,0 +1,82 @@
+{
+  "name": "Caseritas POS - Producto por codigo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "producto",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-producto",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "caseritas-producto"
+    },
+    {
+      "parameters": {
+        "jsCode": "const code = String($json.query?.code || '').trim();\nif (!code) {\n  throw new Error('Ingresa un codigo de barras valido.');\n}\nconst safe = code.replace(/\\\\/g, '\\\\\\\\').replace(/\"/g, '\\\\\"');\nconst formula = `AND(({Stock Actual} & \"\") != \"\", VALUE({Stock Actual} & \"\") > 0, {Codigo de Barras} = \"${safe}\")`;\nreturn [{ json: { code, formula } }];"
+      },
+      "id": "validacion-producto",
+      "name": "Validacion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblyBp7gm4Lheqr7s",
+          "mode": "id"
+        },
+        "filterByFormula": "={{$json.formula}}",
+        "options": {}
+      },
+      "id": "airtable-producto",
+      "name": "Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => { const item = $items('Airtable')[0]; if (!item) return { producto: null }; const record = item.json.fields || item.json; const barcode = record['Codigo de Barras']; return { producto: { id: item.json.id, name: record.Name, barcode: barcode?.text || barcode || '', price: Number(record.Importe || record['Precio x Kg'] || 0), weight: Number(record.Peso || 0), stock: Number(record['Stock Actual'] || 0) } }; })() }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Access-Control-Allow-Headers", "value": "*" },
+              { "name": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" }
+            ]
+          }
+        }
+      },
+      "id": "respond-producto",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [720, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Validacion", "type": "main", "index": 0 }]] },
+    "Validacion": { "main": [[{ "node": "Airtable", "type": "main", "index": 0 }]] },
+    "Airtable": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "caseritas-producto-v1"
+}

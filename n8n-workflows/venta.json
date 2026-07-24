@@ -1,0 +1,122 @@
+{
+  "name": "Caseritas POS - Registrar venta",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "venta",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-venta",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "caseritas-venta"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.body || $json;\nconst sale = typeof raw === 'string' ? JSON.parse(raw) : raw;\nif (!Array.isArray(sale.items) || sale.items.length === 0) {\n  throw new Error('La venta no tiene productos.');\n}\nif (!sale.paymentMethod) {\n  throw new Error('Selecciona un metodo de pago.');\n}\nconst total = Number(sale.total || 0);\nif (!Number.isFinite(total) || total <= 0) {\n  throw new Error('El total de la venta no es valido.');\n}\nreturn [{\n  json: {\n    Fecha: sale.createdAt || new Date().toISOString(),\n    MetodoPago: sale.paymentMethod,\n    Subtotal: Number(sale.subtotal || 0),\n    DescuentoPorcentaje: Number(sale.discountPercent || 0),\n    DescuentoImporte: Number(sale.discountAmount || 0),\n    Total: total,\n    EfectivoRecibido: Number(sale.cashReceived || 0),\n    ItemsJSON: JSON.stringify(sale.items),\n    Estado: 'Registrada'\n  }\n}];"
+      },
+      "id": "validacion-venta",
+      "name": "Validacion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbleU4MHRm3Z2iRcY",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "airtable-venta",
+      "name": "Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const venta = $items('Validacion')[0].json;\nconst ventaCreada = $items('Airtable')[0].json;\nreturn [{\n  json: {\n    Fecha: venta.Fecha,\n    Tipo: 'Ingreso',\n    Concepto: 'Venta POS',\n    MetodoPago: venta.MetodoPago,\n    Importe: venta.Total,\n    VentaId: ventaCreada.id,\n    Estado: 'Confirmado'\n  }\n}];"
+      },
+      "id": "preparar-caja",
+      "name": "Preparar Caja",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblkRxqoxwCZiLiVl",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "id": "airtable-caja",
+      "name": "Airtable Caja",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [960, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, id: $items('Airtable')[0].json.id, cajaId: $items('Airtable Caja')[0].json.id, message: 'Venta registrada correctamente.' } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
+              { "name": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+            ]
+          }
+        }
+      },
+      "id": "respond-venta",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Validacion", "type": "main", "index": 0 }]] },
+    "Validacion": { "main": [[{ "node": "Airtable", "type": "main", "index": 0 }]] },
+    "Airtable": { "main": [[{ "node": "Preparar Caja", "type": "main", "index": 0 }]] },
+    "Preparar Caja": { "main": [[{ "node": "Airtable Caja", "type": "main", "index": 0 }]] },
+    "Airtable Caja": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "caseritas-venta-v1"
+}

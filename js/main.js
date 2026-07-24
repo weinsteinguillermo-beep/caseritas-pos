@@ -1,5 +1,7 @@
 "use strict";
 
+import "./api.js";
+
 const api = new CaseritasAPI();
 const pos = new POS(api);
 

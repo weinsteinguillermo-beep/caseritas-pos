@@ -1,0 +1,81 @@
+{
+  "name": "Caseritas POS - Buscar clientes",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "clientes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-clientes",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "caseritas-clientes"
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = String($json.query?.text || '').trim();\nconst safe = text.replace(/\"/g, '\\\\\"');\nconst formula = text ? `OR(FIND(LOWER(\"${safe}\"), LOWER({Nombre})), FIND(LOWER(\"${safe}\"), LOWER({Telefono})))` : 'TRUE()';\nreturn [{ json: { text, formula } }];"
+      },
+      "id": "validacion-clientes",
+      "name": "Validacion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appyWpTmIw3rZEcuW",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblLjKNdmUB4OsTU1",
+          "mode": "id"
+        },
+        "filterByFormula": "={{$json.formula}}",
+        "options": {}
+      },
+      "id": "airtable-clientes",
+      "name": "Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { clientes: $items('Airtable').map(item => ({ id: item.json.id, name: item.json.fields.Nombre, phone: item.json.fields.Telefono, email: item.json.fields.Email, address: item.json.fields.Direccion })) } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
+              { "name": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+            ]
+          }
+        }
+      },
+      "id": "respond-clientes",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [720, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Validacion", "type": "main", "index": 0 }]] },
+    "Validacion": { "main": [[{ "node": "Airtable", "type": "main", "index": 0 }]] },
+    "Airtable": { "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "caseritas-clientes-v1"
+}

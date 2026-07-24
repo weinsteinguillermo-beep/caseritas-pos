@@ -4,6 +4,7 @@ window.CaseritasViews = window.CaseritasViews || {};
 
 window.CaseritasViews.POS = {
   ui: null,
+  searchDebounceTimer: null,
 
   render() {
     return `
@@ -162,6 +163,8 @@ window.CaseritasViews.POS = {
     const { api, pos } = context;
     const ui = new UI();
     this.ui = ui;
+    const view = this;
+    let lastRequestedSearch = null;
 
     function currentTotals() {
       const discount = ui.getDiscountValue();
@@ -191,10 +194,30 @@ window.CaseritasViews.POS = {
     }
 
     async function loadProducts(search = "", options = {}) {
-      ui.setLoading(true, search ? "Buscando productos..." : "Cargando catálogo...");
+      const safeSearch = CaseritasUtils.sanitizeText(search);
+
+      if (safeSearch.length < 2) {
+        lastRequestedSearch = safeSearch;
+        pos.products = [];
+        ui.setLoading(false);
+        ui.renderProducts(pos.products, addProductToCart);
+
+        if (!options.keepMessage) {
+          ui.showMessage("");
+        }
+
+        return;
+      }
+
+      if (!options.force && safeSearch === lastRequestedSearch) {
+        return;
+      }
+
+      lastRequestedSearch = safeSearch;
+      ui.setLoading(true, "Buscando productos...");
 
       try {
-        await pos.cargarProductos(search);
+        await pos.cargarProductos(safeSearch);
         ui.setLoading(false);
         ui.renderProducts(pos.products, addProductToCart);
 
@@ -202,6 +225,7 @@ window.CaseritasViews.POS = {
           ui.showMessage("");
         }
       } catch (error) {
+        lastRequestedSearch = null;
         pos.products = [];
         ui.setLoading(false);
         ui.renderProducts(pos.products, addProductToCart);
@@ -213,6 +237,13 @@ window.CaseritasViews.POS = {
       pos.agregarProducto(product);
       renderCart();
       ui.showMessage(`${product.name} agregado al carrito.`, "success");
+    }
+
+    function scheduleProductSearch() {
+      window.clearTimeout(view.searchDebounceTimer);
+      view.searchDebounceTimer = window.setTimeout(() => {
+        loadProducts(ui.getSearchTerm());
+      }, 500);
     }
 
     async function handleSearchSubmit(event) {
@@ -233,7 +264,7 @@ window.CaseritasViews.POS = {
         if (product) {
           addProductToCart(product);
           ui.clearSearch();
-          await loadProducts("", { keepMessage: true });
+          await loadProducts("", { keepMessage: true, force: true });
           ui.showMessage(`${product.name} agregado al carrito.`, "success");
           return;
         }
@@ -264,7 +295,7 @@ window.CaseritasViews.POS = {
         if (duplicate) {
           addProductToCart(duplicate);
           ui.closeMissingProductModal();
-          await loadProducts("", { keepMessage: true });
+          await loadProducts("", { keepMessage: true, force: true });
           ui.showMessage(`${duplicate.name} agregado al carrito.`, "success");
           return;
         }
@@ -280,7 +311,7 @@ window.CaseritasViews.POS = {
         addProductToCart(product);
         ui.closeMissingProductModal();
         ui.clearSearch();
-        await loadProducts("", { keepMessage: true });
+        await loadProducts("", { keepMessage: true, force: true });
         ui.showMessage(`${product.name} agregado al carrito.`, "success");
       } catch (error) {
         ui.showMessage(CaseritasUtils.friendlyApiError(error), "error");
@@ -305,7 +336,7 @@ window.CaseritasViews.POS = {
         await pos.cobrar(discount, cashReceived);
         ui.resetSaleControls();
         renderCart();
-        await loadProducts("", { keepMessage: true });
+        await loadProducts("", { keepMessage: true, force: true });
         ui.showMessage("Cobro confirmado. La venta quedó lista para una nueva operación.", "success");
         ui.clearSearch();
       } catch (error) {
@@ -324,7 +355,7 @@ window.CaseritasViews.POS = {
 
     ui.bind({
       onSearchSubmit: handleSearchSubmit,
-      onSearchInput: async () => loadProducts(ui.getSearchTerm()),
+      onSearchInput: scheduleProductSearch,
       onTotalsChange: renderCart,
       onCharge: handleCharge,
       onClearSale: handleClearSale,
@@ -338,10 +369,13 @@ window.CaseritasViews.POS = {
     });
 
     renderCart();
-    await loadProducts();
+    await loadProducts("", { force: true });
   },
 
   destroy() {
+    window.clearTimeout(this.searchDebounceTimer);
+    this.searchDebounceTimer = null;
+
     if (this.ui) {
       this.ui.destroy();
       this.ui = null;

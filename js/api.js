@@ -1,216 +1,270 @@
-"use strict";
+import { API_BASE, USE_LOCAL_FALLBACK } from "./config.js";
 
-const mockProducts = [
+const DEFAULT_HEADERS = {
+  Accept: "application/json",
+};
+
+const MIN_SEARCH_LENGTH = 2;
+const LOCAL_FALLBACK_PRODUCTS = [
   {
-    id: "p-001",
-    name: "Milanesas de pollo congeladas",
-    barcode: "7790001000012",
-    price: 420,
-    weight: 1000,
-    stock: 18,
+    id: "local-papas",
+    name: "Papas congeladas",
+    barcode: "LOCAL-001",
+    price: 0,
+    weight: 0,
+    stock: 1,
   },
   {
-    id: "p-002",
-    name: "Empanadas de carne surtidas",
-    barcode: "7790001000029",
-    price: 780,
-    weight: 1200,
-    stock: 12,
-  },
-  {
-    id: "p-003",
-    name: "Ravioles de verdura",
-    barcode: "7790001000036",
-    price: 360,
-    weight: 500,
-    stock: 22,
-  },
-  {
-    id: "p-004",
-    name: "Hamburguesas caseras",
-    barcode: "7790001000043",
-    price: 690,
-    weight: 800,
-    stock: 15,
-  },
-  {
-    id: "p-005",
-    name: "Ñoquis de papa",
-    barcode: "7790001000050",
-    price: 310,
-    weight: 500,
-    stock: 20,
-  },
-  {
-    id: "p-006",
-    name: "Tarta de jamón y queso",
-    barcode: "7790001000067",
-    price: 520,
-    weight: 650,
-    stock: 9,
-  },
-  {
-    id: "p-007",
-    name: "Pascualina congelada",
-    barcode: "7790001000074",
-    price: 490,
-    weight: 700,
-    stock: 11,
-  },
-  {
-    id: "p-008",
-    name: "Croquetas de espinaca",
-    barcode: "7790001000081",
-    price: 450,
-    weight: 600,
-    stock: 16,
+    id: "local-milanesa",
+    name: "Milanesa congelada",
+    barcode: "LOCAL-002",
+    price: 0,
+    weight: 0,
+    stock: 1,
   },
 ];
 
-/**
- * Capa de comunicación de Caseritas POS.
- * Es el único lugar donde se usa fetch() y donde luego se conectarán los webhooks de n8n.
- */
-class CaseritasAPI {
-  constructor(baseUrl = API_BASE_URL) {
-    this.baseUrl = String(baseUrl || "").replace(/\/$/, "");
+let lastProductsSearch = {
+  text: null,
+  products: [],
+};
+
+function buildUrl(path, params = {}) {
+  const url = new URL(`${API_BASE.replace(/\/$/, "")}/${path.replace(/^\//, "")}`);
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      url.searchParams.set(key, String(value).trim());
+    }
+  });
+
+  return url.toString();
+}
+
+async function readApiResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json") ? await response.json() : await response.text();
+
+  if (!response.ok) {
+    const message =
+      payload && typeof payload === "object"
+        ? payload.message || payload.error || payload.detail
+        : payload;
+
+    throw new Error(message || "No se pudo completar la operacion. Revisa los datos e intentalo nuevamente.");
   }
 
-  usarApiRemota() {
-    return this.baseUrl.length > 0;
+  return payload;
+}
+
+async function request(path, options = {}) {
+  try {
+    const response = await fetch(buildUrl(path, options.params), {
+      method: options.method || "GET",
+      headers: {
+        ...DEFAULT_HEADERS,
+        ...(options.body ? { "Content-Type": "text/plain;charset=UTF-8" } : {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+
+    return await readApiResponse(response);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("Servidor no disponible");
+    }
+
+    throw error;
+  }
+}
+
+function normalizeProducts(payload) {
+  const products = (() => {
+  if (Array.isArray(payload)) {
+    return payload;
   }
 
-  endpoint(path) {
-    return `${this.baseUrl}${path}`;
+  if (Array.isArray(payload?.productos)) {
+    return payload.productos;
   }
 
-  async pedirJson(path, options = {}) {
-    try {
-      const response = await fetch(this.endpoint(path), {
-        headers: {
-          "Content-Type": "application/json",
-          ...(options.headers || {}),
-        },
-        ...options,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Respuesta HTTP ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      throw new Error(
-        "No se pudo conectar con el servidor. La venta sigue disponible en modo local mientras se revisa n8n."
-      );
-    }
+  if (Array.isArray(payload?.products)) {
+    return payload.products;
   }
 
-  normalizarListaProductos(data) {
-    if (Array.isArray(data)) {
-      return data;
-    }
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
 
-    if (Array.isArray(data.productos)) {
-      return data.productos;
-    }
+  return [];
+  })();
 
-    if (Array.isArray(data.products)) {
-      return data.products;
-    }
+  return products.map((product) => ({
+    id: String(product.id || ""),
+    name: String(product.name || ""),
+    barcode: String(product.barcode || ""),
+    price: Number(product.price || 0),
+    weight: Number(product.weight || 0),
+    stock: Number(product.stock || 0),
+  }));
+}
 
+function normalizeProduct(payload) {
+  const product = payload?.producto || payload?.product || payload?.data || payload || null;
+
+  if (!product) {
+    return null;
+  }
+
+  return normalizeProducts([product])[0] || null;
+}
+
+function normalizeCustomers(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload?.clientes)) {
+    return payload.clientes;
+  }
+
+  if (Array.isArray(payload?.customers)) {
+    return payload.customers;
+  }
+
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
+
+  return [];
+}
+
+export async function searchProducts(text = "") {
+  const cleanText = String(text || "").trim();
+
+  if (cleanText.length < MIN_SEARCH_LENGTH) {
+    lastProductsSearch = {
+      text: cleanText,
+      products: [],
+    };
     return [];
   }
 
-  async buscarProductos(busqueda = "") {
-    const term = CaseritasUtils.normalize(busqueda);
+  if (lastProductsSearch.text === cleanText) {
+    return lastProductsSearch.products;
+  }
 
-    if (this.usarApiRemota()) {
-      // n8n consultará Airtable y devolverá productos normalizados.
-      const data = await this.pedirJson(`/productos?buscar=${encodeURIComponent(busqueda)}`);
-      return this.normalizarListaProductos(data);
-    }
-
-    if (!term) {
-      return [...mockProducts];
-    }
-
-    return mockProducts.filter((product) => {
+  if (USE_LOCAL_FALLBACK) {
+    const normalized = cleanText.toLocaleLowerCase("es");
+    const products = LOCAL_FALLBACK_PRODUCTS.filter((product) => {
       return (
-        CaseritasUtils.normalize(product.name).includes(term) ||
-        CaseritasUtils.normalize(product.barcode).includes(term)
+        product.name.toLocaleLowerCase("es").includes(normalized) ||
+        product.barcode.toLocaleLowerCase("es").includes(normalized)
       );
     });
-  }
 
-  async buscarProductoPorCodigo(codigo = "") {
-    const term = CaseritasUtils.normalize(codigo);
-
-    if (!term) {
-      return null;
-    }
-
-    if (this.usarApiRemota()) {
-      // n8n recibirá el código escaneado y responderá con el producto de Airtable o null.
-      const data = await this.pedirJson(`/productos/codigo/${encodeURIComponent(codigo)}`);
-      return data.producto || data.product || data || null;
-    }
-
-    return mockProducts.find((product) => CaseritasUtils.normalize(product.barcode) === term) || null;
-  }
-
-  async crearProducto(producto) {
-    if (this.usarApiRemota()) {
-      // n8n creará el producto en Airtable y devolverá el registro normalizado.
-      const data = await this.pedirJson("/productos", {
-        method: "POST",
-        body: JSON.stringify(producto),
-      });
-      return data.producto || data.product || data;
-    }
-
-    const nuevoProducto = {
-      ...producto,
-      id: producto.id || `tmp-${Date.now()}`,
+    lastProductsSearch = {
+      text: cleanText,
+      products,
     };
-
-    mockProducts.unshift(nuevoProducto);
-    return nuevoProducto;
+    return products;
   }
 
-  async registrarVenta(venta) {
-    if (this.usarApiRemota()) {
-      // n8n registrará la venta y podrá disparar flujos posteriores de stock o comprobantes.
-      return await this.pedirJson("/ventas", {
-        method: "POST",
-        body: JSON.stringify(venta),
-      });
-    }
+  const payload = await request("/productos", {
+    params: { text: cleanText },
+  });
 
+  const products = normalizeProducts(payload);
+  lastProductsSearch = {
+    text: cleanText,
+    products,
+  };
+  return products;
+}
+
+export async function getProductByBarcode(code = "") {
+  const cleanCode = String(code || "").trim();
+
+  if (!cleanCode) {
+    return null;
+  }
+
+  if (USE_LOCAL_FALLBACK) {
+    return LOCAL_FALLBACK_PRODUCTS.find((product) => product.barcode === cleanCode) || null;
+  }
+
+  const payload = await request("/producto", {
+    params: { code: cleanCode },
+  });
+
+  return normalizeProduct(payload);
+}
+
+export async function createSale(data) {
+  if (USE_LOCAL_FALLBACK) {
     return {
       ok: true,
-      id: `venta-${Date.now()}`,
-      venta,
+      id: `local-sale-${Date.now()}`,
+      data,
     };
   }
 
-  async actualizarStock(productoId, cantidadVendida) {
-    if (this.usarApiRemota()) {
-      // n8n actualizará el stock real en Airtable cuando esta integración se active.
-      return await this.pedirJson(`/productos/${encodeURIComponent(productoId)}/stock`, {
-        method: "PATCH",
-        body: JSON.stringify({ cantidadVendida }),
-      });
-    }
+  return await request("/venta", {
+    method: "POST",
+    body: data,
+  });
+}
 
-    const product = mockProducts.find((item) => item.id === productoId);
+export async function getCustomers(text = "") {
+  const payload = await request("/clientes", {
+    params: { text },
+  });
 
-    if (product) {
-      product.stock = Math.max(0, product.stock - Number(cantidadVendida || 0));
-    }
+  return normalizeCustomers(payload);
+}
 
-    return product || null;
+class CaseritasAPI {
+  async searchProducts(text = "") {
+    return await searchProducts(text);
+  }
+
+  async getProductByBarcode(code = "") {
+    return await getProductByBarcode(code);
+  }
+
+  async createSale(data) {
+    return await createSale(data);
+  }
+
+  async getCustomers(text = "") {
+    return await getCustomers(text);
+  }
+
+  async buscarProductos(text = "") {
+    return await this.searchProducts(text);
+  }
+
+  async buscarProductoPorCodigo(code = "") {
+    return await this.getProductByBarcode(code);
+  }
+
+  async registrarVenta(data) {
+    return await this.createSale(data);
+  }
+
+  async crearProducto() {
+    throw new Error("Alta rapida no disponible. Crea el producto en Airtable y vuelve a buscarlo.");
+  }
+
+  async actualizarStock() {
+    return null;
   }
 }
 
 window.CaseritasAPI = CaseritasAPI;
+window.CaseritasApiClient = {
+  searchProducts,
+  getProductByBarcode,
+  createSale,
+  getCustomers,
+};

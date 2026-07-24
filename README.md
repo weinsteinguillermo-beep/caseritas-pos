@@ -1,124 +1,123 @@
 # CASERITAS OS
 
-Prototipo frontend de punto de venta para un pequeño comercio de productos congelados. Funciona con HTML, CSS y JavaScript puro, sin frameworks, sin npm, sin dependencias y sin conexión directa a Airtable.
+Frontend estatico de punto de venta para Caseritas POS.
 
-## Demo v0.1
+La aplicacion trabaja con datos reales a traves de n8n. No accede directamente a Airtable y no activa datos locales salvo que se habilite manualmente el modo de desarrollo.
 
-Esta versión agrega una capa visual de demo comercial sin cambiar la arquitectura ni la lógica existente:
+## URL publica
 
-- pantalla de carga inicial;
-- transiciones suaves entre vistas;
-- notificaciones tipo toast;
-- indicadores visuales de búsqueda y cobro;
-- estados táctiles para tablet;
-- navegación lateral con iconografía;
-- mejor jerarquía visual para el POS;
-- animaciones con soporte para `prefers-reduced-motion`.
+URL esperada de GitHub Pages:
 
-Todo sigue funcionando con datos simulados locales. No se conecta Airtable, n8n ni impresoras.
-
-## Cómo ejecutar localmente
-
-Abrí `index.html` directamente en el navegador. No hace falta instalar nada ni iniciar un servidor.
-
-También podés usar cualquier servidor estático local si querés probarlo desde una URL local, pero no es obligatorio para este prototipo.
-
-## Funcionalidades incluidas
-
-- Aplicación de una sola página con navegación interna.
-- Vista POS funcional para nueva venta.
-- Buscador grande para nombre de producto o código de barras.
-- Catálogo local de productos simulados con id, nombre, código, precio, peso y stock.
-- Agregado rápido al carrito sin duplicar productos.
-- Aumento, disminución y eliminación de cantidades.
-- Recalculo automático de subtotal, descuento y total final.
-- Modal de producto no encontrado con carga rápida.
-- Cálculo de importe por precio por kilogramo y peso en gramos.
-- Métodos de pago: efectivo, tarjeta y transferencia.
-- Campo de efectivo recibido y cálculo de vuelto.
-- Validaciones antes de cobrar.
-- Confirmación visual de cobro y limpieza de carrito.
-- Vistas preparadas para Clientes, Productos, Producción, Caja, Reportes y Configuración.
-
-## Arquitectura actual
-
-El proyecto está organizado en módulos para separar responsabilidades y permitir crecimiento sin mezclar interfaz, lógica de negocio, navegación y comunicación externa.
-
-- `index.html`: único HTML de la aplicación. Contiene el encabezado, la barra lateral y el contenedor central de vistas.
-- `styles.css`: diseño base existente. No requiere frameworks.
-- `js/config.js`: configuración general. Contiene `API_BASE_URL`.
-- `js/utils.js`: utilidades compartidas de moneda, fechas, validación y sanitización.
-- `js/api.js`: clase `CaseritasAPI`. Es el único archivo que puede usar `fetch()`.
-- `js/pos.js`: clase `POS`. Contiene reglas del punto de venta, carrito, descuento, vuelto y cobro.
-- `js/ui.js`: clase `UI`. Centraliza DOM, mensajes, modales, carrito, totales e indicadores de carga.
-- `js/router.js`: router SPA propio.
-- `js/main.js`: punto de entrada. Inicializa API, POS y Router.
-- `views/`: vistas cargadas dinámicamente por el router.
-
-## Router SPA
-
-El router usa el hash de la URL, por ejemplo `#pos` o `#clientes`, para cambiar de vista sin recargar la página y sin abrir otros archivos HTML.
-
-Cada ruta define:
-
-- `id`: identificador de navegación.
-- `label`: nombre mostrado en la barra lateral.
-- `icon`: marca breve para la opción.
-- `script`: archivo de vista a cargar bajo demanda.
-- `viewName`: nombre registrado en `window.CaseritasViews`.
-
-Cada vista debe exponer:
-
-```js
-render()
-init(context)
-destroy()
+```txt
+https://weinsteinguillermo-beep.github.io/caseritas-pos/
 ```
 
-- `render()` devuelve el HTML de la vista.
-- `init(context)` conecta eventos y recibe dependencias compartidas como `api` y `pos`.
-- `destroy()` limpia listeners o recursos cuando se cambia a otra vista.
+Repositorio:
 
-Las vistas se cargan dinámicamente insertando su script la primera vez que se navega a ellas. Luego quedan disponibles en memoria para visitas posteriores.
+```txt
+https://github.com/weinsteinguillermo-beep/caseritas-pos
+```
 
-## Vistas disponibles
+## Como ejecutar
 
-- `views/pos.js`: punto de venta funcional.
-- `views/clientes.js`: preparada para clientes.
-- `views/productos.js`: preparada para inventario.
-- `views/produccion.js`: preparada para producción.
-- `views/caja.js`: preparada para caja.
-- `views/reportes.js`: preparada para reportes.
-- `views/configuracion.js`: preparada para configuración.
+Publicar con GitHub Pages o servir la carpeta con un servidor estatico local.
 
-## Configuración para n8n
+No requiere npm, build ni dependencias frontend. Al usar modulos JavaScript, algunos navegadores bloquean imports si se abre `index.html` directamente como archivo local.
+
+## Configuracion API
 
 `js/config.js` contiene:
 
 ```js
-const API_BASE_URL = "";
+export const API_BASE =
+  "https://gweinstein26.app.n8n.cloud/webhook";
+
+export const USE_LOCAL_FALLBACK = false;
 ```
 
-Mientras ese valor esté vacío, la aplicación usa datos simulados en memoria desde `js/api.js`, por lo que sigue funcionando sin servidor y es compatible con GitHub Pages.
+URL base de n8n:
 
-Cuando los webhooks de n8n estén listos, reemplazá el valor vacío por la URL base del webhook:
-
-```js
-const API_BASE_URL = "https://tu-instancia-n8n/webhook/caseritas-pos";
+```txt
+https://gweinstein26.app.n8n.cloud/webhook
 ```
 
-No se debe llamar Airtable directamente desde el navegador. n8n será la capa intermedia segura entre GitHub Pages y Airtable.
+Endpoints utilizados:
 
-## Publicación con GitHub Pages
+```txt
+GET  /productos?text=texto
+GET  /producto?code=7790000000000
+GET  /clientes?text=texto
+POST /venta
+```
 
-1. Subí estos archivos a un repositorio de GitHub.
-2. Entrá en `Settings > Pages`.
-3. En `Build and deployment`, elegí `Deploy from a branch`.
-4. Seleccioná la rama principal y la carpeta raíz.
-5. Guardá los cambios y esperá a que GitHub publique la página.
+## Consumo de n8n
 
-Como el prototipo usa archivos estáticos, GitHub Pages puede servirlo sin pasos de compilación.
+n8n tiene limite mensual de ejecuciones. Para reducir consumo:
 
-## Seguridad y validación
+- el POS no consulta productos con busquedas vacias;
+- exige minimo 2 caracteres antes de consultar productos;
+- aplica debounce de 500 ms al campo de busqueda;
+- evita repetir una consulta identica si el texto no cambio;
+- no hace fallback automatico si n8n no responde.
 
-El prototipo evita insertar HTML ingresado por el usuario y muestra textos mediante `textContent` en las partes dinámicas de datos. Los campos numéricos se validan antes de calcular importes, descuentos, vuelto y cobros. No hay claves, tokens ni credenciales en el frontend.
+Recomendacion operativa: no consultar en cada pulsacion directa contra n8n. Mantener siempre debounce y minimo de caracteres.
+
+## Modo de desarrollo
+
+`USE_LOCAL_FALLBACK` debe quedar en `false` para produccion.
+
+Si se cambia manualmente a `true`, el POS permite un conjunto pequeno de productos locales solo para desarrollo. Este modo no se activa automaticamente cuando n8n falla.
+
+## Arquitectura
+
+- `index.html`: estructura principal de la aplicacion.
+- `styles.css`: estilos existentes.
+- `js/config.js`: URL base de n8n y bandera de fallback controlado.
+- `js/api.js`: capa API desacoplada. Es el unico archivo que usa `fetch()`.
+- `js/utils.js`: utilidades compartidas.
+- `js/pos.js`: logica del punto de venta, carrito, descuento, vuelto y cobro.
+- `js/ui.js`: DOM, mensajes, modales, carrito, totales e indicadores.
+- `js/router.js`: router SPA.
+- `js/main.js`: punto de entrada.
+- `views/`: vistas cargadas por el router.
+- `n8n-workflows/`: workflows importables para n8n Cloud.
+
+## n8n y Airtable
+
+Los workflows importables estan en `n8n-workflows/`:
+
+- `productos.json`
+- `producto.json`
+- `clientes.json`
+- `venta.json`
+
+La tabla PRODUCCION usa estos campos reales para productos:
+
+```txt
+Name
+Codigo de Barras
+Importe
+Precio x Kg
+Peso
+Stock Actual
+```
+
+Ver `n8n-workflows/README.md` para importar workflows, configurar credenciales Airtable, confirmar tablas esperadas y probar URLs.
+
+## Publicar con GitHub Desktop
+
+1. Abrir GitHub Desktop.
+2. Seleccionar el repositorio `caseritas-pos`.
+3. Revisar los cambios pendientes.
+4. Escribir un resumen de commit.
+5. Presionar `Commit to main` o la rama activa.
+6. Presionar `Push origin`.
+7. En GitHub, revisar `Settings > Pages`.
+8. Confirmar que GitHub Pages publique desde la rama y carpeta configuradas.
+9. Abrir la URL publica del POS.
+
+## Seguridad
+
+No hay claves, tokens ni credenciales en el frontend.
+
+Airtable queda protegido detras de n8n. GitHub Pages solo consume webhooks publicos configurados para responder con CORS.

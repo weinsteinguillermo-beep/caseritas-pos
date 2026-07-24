@@ -15,7 +15,7 @@ class POS {
 
   async cargarProductos(search = "") {
     this.search = CaseritasUtils.sanitizeText(search);
-    this.products = await this.api.buscarProductos(this.search);
+    this.products = await this.api.searchProducts(this.search);
     return this.products;
   }
 
@@ -31,13 +31,14 @@ class POS {
 
   async buscarProductoParaVenta(term) {
     const safeTerm = CaseritasUtils.sanitizeText(term);
-    const barcodeProduct = await this.api.buscarProductoPorCodigo(safeTerm);
+    const looksLikeBarcode = /\d/.test(safeTerm) && /^[\dA-Za-z-]+$/.test(safeTerm);
+    const barcodeProduct = looksLikeBarcode ? await this.api.getProductByBarcode(safeTerm) : null;
 
     if (barcodeProduct) {
       return barcodeProduct;
     }
 
-    const products = await this.api.buscarProductos(safeTerm);
+    const products = await this.api.searchProducts(safeTerm);
     return (
       products.find((item) => CaseritasUtils.normalize(item.name) === CaseritasUtils.normalize(safeTerm)) ||
       products[0] ||
@@ -163,11 +164,7 @@ class POS {
     }
 
     const payload = this.ventaPayload(discountValue, cashReceived);
-    await this.api.registrarVenta(payload);
-
-    for (const item of this.cart) {
-      await this.api.actualizarStock(item.product.id, item.quantity);
-    }
+    await this.api.createSale(payload);
 
     this.limpiarVenta();
     return payload;

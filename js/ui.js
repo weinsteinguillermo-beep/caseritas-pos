@@ -1,9 +1,5 @@
 "use strict";
 
-/**
- * Capa de interfaz de Caseritas POS.
- * Centraliza lectura y actualización del DOM sin mezclar reglas de negocio.
- */
 class UI {
   constructor() {
     this.loading = false;
@@ -11,6 +7,7 @@ class UI {
     this.els = {
       searchForm: document.querySelector("#search-form"),
       searchInput: document.querySelector("#product-search"),
+      customerName: document.querySelector("#customer-name"),
       searchButton: document.querySelector("#search-form button[type='submit']"),
       messageArea: document.querySelector("#message-area"),
       productList: document.querySelector("#product-list"),
@@ -41,151 +38,96 @@ class UI {
 
   createEl(tag, options = {}) {
     const element = document.createElement(tag);
-
-    if (options.className) {
-      element.className = options.className;
-    }
-
-    if (options.text !== undefined) {
-      element.textContent = options.text;
-    }
-
-    if (options.type) {
-      element.type = options.type;
-    }
-
-    if (options.ariaLabel) {
-      element.setAttribute("aria-label", options.ariaLabel);
-    }
-
+    if (options.className) element.className = options.className;
+    if (options.text !== undefined) element.textContent = options.text;
+    if (options.type) element.type = options.type;
+    if (options.ariaLabel) element.setAttribute("aria-label", options.ariaLabel);
     return element;
   }
 
   showMessage(text, type = "success") {
     this.els.messageArea.textContent = "";
-
-    if (!text) {
-      return;
-    }
-
-    const message = this.createEl("div", {
-      className: `message ${type}`,
-      text,
-    });
-    this.els.messageArea.append(message);
+    if (!text) return;
+    this.els.messageArea.append(this.createEl("div", { className: `message ${type}`, text }));
   }
 
   setLoading(isLoading, text = "Cargando...") {
     this.loading = isLoading;
     this.els.searchButton.disabled = isLoading;
-    this.els.chargeButton.disabled = isLoading;
     this.els.clearSaleButton.disabled = isLoading;
-
-    if (isLoading) {
-      this.showMessage(text, "warning");
+    const isSaleOperation = /venta|cobro|operacion/i.test(text);
+    if (!isLoading) {
+      this.els.chargeButton.dataset.loading = "false";
+    } else if (isSaleOperation) {
+      this.els.chargeButton.disabled = true;
+      this.els.chargeButton.dataset.loading = "true";
+      this.els.chargeButton.textContent = text;
     }
+    if (isLoading) this.showMessage(text, "warning");
   }
 
   renderProducts(products, onAddProduct) {
     this.els.productList.textContent = "";
     this.els.productCount.textContent = `${products.length} productos`;
-
     if (this.loading) {
-      this.els.productList.append(
-        this.createEl("div", {
-          className: "empty-cart",
-          text: "Cargando productos...",
-        })
-      );
+      this.els.productList.append(this.createEl("div", { className: "empty-cart", text: "Cargando productos..." }));
       return;
     }
-
     if (products.length === 0) {
-      this.els.productList.append(
-        this.createEl("div", {
-          className: "empty-cart",
-          text: "No hay coincidencias. Usá Agregar para abrir la carga rápida.",
-        })
+      const empty = this.createEl("div", { className: "empty-cart catalog-empty" });
+      empty.append(
+        this.createEl("strong", { text: "No hay productos cargados." }),
+        this.createEl("span", { text: "Busca por nombre o escanea un codigo." })
       );
+      this.els.productList.append(empty);
       return;
     }
-
     products.forEach((product) => {
       const card = this.createEl("article", { className: "product-card" });
-      const title = this.createEl("h4", { text: product.name });
       const meta = this.createEl("div", { className: "product-meta" });
-      const price = this.createEl("span", { text: `${CaseritasUtils.money(product.price)} - ${product.weight} g` });
-      const barcode = this.createEl("span", { text: `Código: ${product.barcode}` });
-      const stock = this.createEl("span", { text: `Stock: ${product.stock}` });
       const button = this.createEl("button", { type: "button", text: "Agregar" });
-
       button.disabled = this.loading;
       button.addEventListener("click", () => onAddProduct(product));
-
-      meta.append(price, barcode, stock);
-      card.append(title, meta, button);
+      meta.append(
+        this.createEl("span", { text: `${CaseritasUtils.money(product.price)} - ${product.weight} g` }),
+        this.createEl("span", { text: `Codigo: ${product.barcode}` }),
+        this.createEl("span", { text: `Stock: ${product.stock}` })
+      );
+      card.append(this.createEl("h4", { text: product.name }), meta, button);
       this.els.productList.append(card);
     });
   }
 
   renderCart(cart, totals, callbacks) {
     this.els.cartItems.textContent = "";
-
     const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-    this.els.cartCount.textContent = `${itemCount} ${itemCount === 1 ? "ítem" : "ítems"}`;
-
+    this.els.cartCount.textContent = `${itemCount} ${itemCount === 1 ? "articulo" : "articulos"}`;
     if (cart.length === 0) {
-      this.els.cartItems.append(
-        this.createEl("div", {
-          className: "empty-cart",
-          text: "El carrito está vacío. Agregá productos desde el buscador o el catálogo.",
-        })
-      );
+      this.els.cartItems.append(this.createEl("div", { className: "empty-cart", text: "El carrito esta vacio. Agrega productos desde el buscador." }));
     } else {
       cart.forEach((item) => {
         const row = this.createEl("article", { className: "cart-item" });
         const top = this.createEl("div", { className: "cart-item-top" });
         const details = this.createEl("div");
-        const name = this.createEl("h4", { text: item.product.name });
-        const unit = this.createEl("small", {
-          text: `${CaseritasUtils.money(item.product.price)} c/u - ${item.product.weight} g`,
-        });
-        const lineTotal = this.createEl("strong", {
-          text: CaseritasUtils.money(item.product.price * item.quantity),
-        });
-
+        details.append(
+          this.createEl("h4", { text: item.product.name }),
+          this.createEl("small", { text: `${CaseritasUtils.money(item.product.price)} c/u - ${item.product.weight} g` })
+        );
+        top.append(details, this.createEl("strong", { text: CaseritasUtils.money(item.product.price * item.quantity) }));
         const actions = this.createEl("div", { className: "cart-item-actions" });
         const qty = this.createEl("div", { className: "qty-controls" });
-        const decrease = this.createEl("button", {
-          type: "button",
-          text: "−",
-          ariaLabel: `Disminuir cantidad de ${item.product.name}`,
-        });
-        const quantity = this.createEl("span", { text: String(item.quantity) });
-        const increase = this.createEl("button", {
-          type: "button",
-          text: "+",
-          ariaLabel: `Aumentar cantidad de ${item.product.name}`,
-        });
-        const remove = this.createEl("button", {
-          className: "remove-button",
-          type: "button",
-          text: "Eliminar",
-        });
-
+        const decrease = this.createEl("button", { type: "button", text: "-", ariaLabel: `Disminuir cantidad de ${item.product.name}` });
+        const increase = this.createEl("button", { type: "button", text: "+", ariaLabel: `Aumentar cantidad de ${item.product.name}` });
+        const remove = this.createEl("button", { className: "remove-button", type: "button", text: "Eliminar" });
         decrease.addEventListener("click", () => callbacks.onQuantityChange(item.product.id, -1));
         increase.addEventListener("click", () => callbacks.onQuantityChange(item.product.id, 1));
         remove.addEventListener("click", () => callbacks.onRemoveProduct(item.product.id));
-
-        details.append(name, unit);
-        top.append(details, lineTotal);
-        qty.append(decrease, quantity, increase);
+        qty.append(decrease, this.createEl("span", { text: String(item.quantity) }), increase);
         actions.append(qty, remove);
         row.append(top, actions);
         this.els.cartItems.append(row);
       });
     }
-
     this.renderTotals(totals);
   }
 
@@ -196,27 +138,25 @@ class UI {
     this.els.change.textContent = CaseritasUtils.money(totals.change);
   }
 
-  openMissingProductModal(term) {
-    const safeTerm = CaseritasUtils.sanitizeText(term);
-    this.els.missingForm.reset();
-    this.els.newName.value = safeTerm && !/^\d+$/.test(safeTerm) ? safeTerm : "";
-    this.els.newBarcode.value = CaseritasUtils.sanitizeBarcode(term);
-    this.updateNewProductPreview();
-    this.els.modal.classList.remove("hidden");
-    this.els.newName.focus();
+  updateChargeButton(totals, cart, blockedReason = "") {
+    if (this.els.chargeButton.dataset.loading === "true") return;
+    const hasProducts = cart.length > 0 && totals.total > 0;
+    const hasPayment = Array.from(this.els.paymentInputs).some((input) => input.checked);
+    this.els.chargeButton.disabled = Boolean(blockedReason) || !hasProducts || !hasPayment;
+    if (blockedReason) {
+      this.els.chargeButton.textContent = blockedReason;
+      return;
+    }
+    if (!hasProducts) {
+      this.els.chargeButton.textContent = "Agrega productos";
+      return;
+    }
+    this.els.chargeButton.textContent = hasPayment ? `COBRAR - ${CaseritasUtils.money(totals.total)}` : "Selecciona forma de pago";
   }
 
-  closeMissingProductModal() {
-    this.els.modal.classList.add("hidden");
-    this.els.searchInput.focus();
-  }
-
-  updateNewProductPreview() {
-    const priceKg = CaseritasUtils.positiveNumber(this.els.newPriceKg.value);
-    const weight = CaseritasUtils.positiveNumber(this.els.newWeight.value);
-    const amount = priceKg * (weight / 1000);
-    this.els.newProductTotal.textContent = CaseritasUtils.money(amount);
-  }
+  openMissingProductModal() {}
+  closeMissingProductModal() { this.els.searchInput.focus(); }
+  updateNewProductPreview() {}
 
   setPaymentUI(method) {
     this.els.cashBox.classList.toggle("hidden", method !== "cash");
@@ -225,9 +165,7 @@ class UI {
   resetSaleControls() {
     this.els.discount.value = "0";
     this.els.cashReceived.value = "";
-    this.els.paymentInputs.forEach((input) => {
-      input.checked = false;
-    });
+    this.els.paymentInputs.forEach((input) => { input.checked = false; });
     this.els.cashBox.classList.add("hidden");
   }
 
@@ -237,63 +175,32 @@ class UI {
   }
 
   normalizeDiscountInput() {
-    if (Number(this.els.discount.value) > 100) {
-      this.els.discount.value = "100";
-    }
+    if (Number(this.els.discount.value) > 100) this.els.discount.value = "100";
   }
 
-  getSearchTerm() {
-    return CaseritasUtils.sanitizeText(this.els.searchInput.value);
-  }
-
-  getDiscountValue() {
-    this.normalizeDiscountInput();
-    return this.els.discount.value;
-  }
-
-  getCashReceived() {
-    return this.els.cashReceived.value;
-  }
-
-  getMissingProductForm() {
-    return {
-      name: CaseritasUtils.sanitizeText(this.els.newName.value),
-      barcode: CaseritasUtils.sanitizeBarcode(this.els.newBarcode.value),
-      priceKg: CaseritasUtils.positiveNumber(this.els.newPriceKg.value),
-      weight: CaseritasUtils.positiveNumber(this.els.newWeight.value),
-    };
-  }
+  getSearchTerm() { return CaseritasUtils.sanitizeText(this.els.searchInput.value); }
+  getDiscountValue() { this.normalizeDiscountInput(); return this.els.discount.value; }
+  getCashReceived() { return this.els.cashReceived.value; }
+  getMissingProductForm() { return { name: "", barcode: "", priceKg: 0, weight: 0 }; }
 
   bind(events) {
     this.abortController = new AbortController();
     const options = { signal: this.abortController.signal };
-
     this.els.searchForm.addEventListener("submit", events.onSearchSubmit, options);
     this.els.searchInput.addEventListener("input", events.onSearchInput, options);
     this.els.discount.addEventListener("input", events.onTotalsChange, options);
     this.els.cashReceived.addEventListener("input", events.onTotalsChange, options);
     this.els.chargeButton.addEventListener("click", events.onCharge, options);
     this.els.clearSaleButton.addEventListener("click", events.onClearSale, options);
-    this.els.closeModalButton.addEventListener("click", events.onCloseModal, options);
-    this.els.cancelModalButton.addEventListener("click", events.onCloseModal, options);
     this.els.missingForm.addEventListener("submit", events.onMissingProductSubmit, options);
-    this.els.newPriceKg.addEventListener("input", () => this.updateNewProductPreview(), options);
-    this.els.newWeight.addEventListener("input", () => this.updateNewProductPreview(), options);
-
-    this.els.paymentInputs.forEach((input) => {
-      input.addEventListener("change", () => events.onPaymentChange(input.value), options);
-    });
-
-    this.els.modal.addEventListener("click", (event) => {
-      if (event.target === this.els.modal) {
-        events.onCloseModal();
-      }
-    }, options);
-
+    this.els.paymentInputs.forEach((input) => input.addEventListener("change", () => events.onPaymentChange(input.value), options));
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !this.els.modal.classList.contains("hidden")) {
-        events.onCloseModal();
-      }
+      const tag = event.target && event.target.tagName ? event.target.tagName.toUpperCase() : "";
+      const isTyping = ["INPUT", "TEXTAREA", "SELECT"].includes(tag);
+      if (event.key === "F2") { event.preventDefault(); this.els.searchInput.focus(); this.els.searchInput.select(); return; }
+      if (event.key === "F4") { event.preventDefault(); this.els.customerName.focus(); return; }
+      if (event.key === "F8" && !isTyping) { event.preventDefault(); this.els.chargeButton.click(); return; }
+      if (event.key === "Escape" && event.target === this.els.searchInput && this.els.searchInput.value) { event.preventDefault(); this.clearSearch(); events.onSearchInput(); }
     }, options);
   }
 

@@ -30,8 +30,22 @@ class Router {
 
   renderNavigation() {
     this.nav.textContent = "";
+    const groupLabels = {
+      OPERACION: "Operación",
+      GESTION: "Gestión",
+      ADMINISTRACION: "Administración",
+    };
+    let currentGroup = "";
 
     this.routes.forEach((route) => {
+      if (route.group && route.group !== currentGroup) {
+        currentGroup = route.group;
+        const heading = document.createElement("p");
+        heading.className = "spa-nav-group";
+        heading.textContent = groupLabels[currentGroup] || currentGroup;
+        this.nav.append(heading);
+      }
+
       const link = document.createElement("a");
       link.href = `#${route.id}`;
       link.className = "spa-nav-link";

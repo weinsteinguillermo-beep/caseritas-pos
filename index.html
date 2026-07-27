@@ -22,13 +22,16 @@
     </div>
 
     <header class="app-header">
-      <div>
+      <div class="brand-block">
         <p class="eyebrow">Punto de venta</p>
         <h1>CASERITAS OS</h1>
+        <p class="header-context" id="header-context">Sucursal principal · Caja sin abrir · Sin cajero</p>
       </div>
-      <div class="header-status" aria-live="polite">
-        <span class="status-dot" aria-hidden="true"></span>
-        Datos locales
+      <div class="header-ops" aria-live="polite">
+        <span class="status-pill" id="header-cash-status" data-state="warning">Caja cerrada</span>
+        <span class="status-pill" id="header-server-status" data-state="warning">Servidor pendiente</span>
+        <span class="status-pill" id="header-sync-status" data-state="neutral">Sincronización pendiente</span>
+        <time class="header-clock" id="header-clock" datetime="">--:--</time>
       </div>
     </header>
 

@@ -7,6 +7,7 @@ window.CaseritasViews.HistorialDia = {
   detailCache: new Map(),
   loading: false,
   voidInFlight: false,
+  pendingVoidSale: null,
 
   render() {
     return `
@@ -34,6 +35,29 @@ window.CaseritasViews.HistorialDia = {
         <div class="message-area" id="history-list" aria-live="polite"></div>
         <div class="message-area" id="history-detail" aria-live="polite"></div>
       </section>
+
+      <div class="modal-backdrop hidden" id="void-sale-modal" role="presentation">
+        <section class="modal" role="dialog" aria-modal="true" aria-labelledby="void-sale-title" aria-describedby="void-sale-description">
+          <div class="modal-heading">
+            <div>
+              <p class="eyebrow">Anulación controlada</p>
+              <h2 id="void-sale-title">Anular venta</h2>
+            </div>
+            <button class="icon-button" id="void-cancel-x" type="button" aria-label="Cerrar">×</button>
+          </div>
+          <p id="void-sale-description">Ingresá el motivo para registrar los movimientos inversos.</p>
+          <form id="void-sale-form" class="modal-form" autocomplete="off">
+            <div class="field-row stacked">
+              <label for="void-reason">Motivo</label>
+              <input id="void-reason" type="text" maxlength="160" required placeholder="Ej: error de cobro">
+            </div>
+            <div class="modal-actions">
+              <button class="ghost-button" id="void-cancel-button" type="button">Cancelar</button>
+              <button class="primary-button" type="submit">Anular venta</button>
+            </div>
+          </form>
+        </section>
+      </div>
     `;
   },
 
@@ -45,6 +69,11 @@ window.CaseritasViews.HistorialDia = {
     const list = document.querySelector("#history-list");
     const detail = document.querySelector("#history-detail");
     const refreshButton = document.querySelector("#refresh-history-button");
+    const voidModal = document.querySelector("#void-sale-modal");
+    const voidForm = document.querySelector("#void-sale-form");
+    const voidReason = document.querySelector("#void-reason");
+    const voidCancelButton = document.querySelector("#void-cancel-button");
+    const voidCancelX = document.querySelector("#void-cancel-x");
     const view = this;
 
     function normalizeSale(sale) {
@@ -246,16 +275,35 @@ window.CaseritasViews.HistorialDia = {
 
       const sale = view.sales.find((item) => item.ventaId === ventaId);
       if (!sale || sale.estado !== "CONFIRMADA") {
-        message.innerHTML = `<div class="message warning">La venta no esta disponible para anular.</div>`;
+        message.innerHTML = `<div class="message warning">La venta no está disponible para anular.</div>`;
         return;
       }
 
       await loadDetail(ventaId);
-      const motivo = window.prompt("Motivo de anulacion");
-      const cleanReason = CaseritasUtils.sanitizeText(motivo || "");
+      view.pendingVoidSale = sale;
+      voidReason.value = "";
+      voidModal.classList.remove("hidden");
+      voidReason.focus();
+    }
+
+    function closeVoidModal() {
+      view.pendingVoidSale = null;
+      voidModal.classList.add("hidden");
+    }
+
+    async function confirmVoidSale(event) {
+      event.preventDefault();
+      if (view.voidInFlight || !view.pendingVoidSale) {
+        return;
+      }
+
+      const sale = view.pendingVoidSale;
+      const ventaId = sale.ventaId;
+      const cleanReason = CaseritasUtils.sanitizeText(voidReason.value || "");
 
       if (!cleanReason) {
         message.innerHTML = `<div class="message warning">El motivo es obligatorio para anular.</div>`;
+        voidReason.focus();
         return;
       }
 
@@ -268,6 +316,7 @@ window.CaseritasViews.HistorialDia = {
       });
 
       view.voidInFlight = true;
+      voidForm.querySelector("button[type='submit']").disabled = true;
       message.innerHTML = `<div class="message warning">Anulando venta...</div>`;
       renderList();
 
@@ -284,6 +333,7 @@ window.CaseritasViews.HistorialDia = {
         appState.setServidor("online");
         appState.markVentaAnulada(ventaId, sale.operationId);
         appState.clearVoidOperation(ventaId, operationId);
+        closeVoidModal();
         message.innerHTML = `<div class="message success">Venta anulada correctamente.</div>`;
         await loadHistory();
         if (result.ventaId) {
@@ -293,7 +343,8 @@ window.CaseritasViews.HistorialDia = {
         if (error.message === "Servidor no disponible") {
           appState.setServidor("offline");
           appState.markVoidOperationUnknown(ventaId, operationId);
-          message.innerHTML = `<div class="message warning">Anulacion pendiente de verificacion. Consultá el detalle antes de repetirla.</div>`;
+          closeVoidModal();
+          message.innerHTML = `<div class="message warning">Anulación pendiente de verificación. Consultá el detalle antes de repetirla.</div>`;
           return;
         }
 
@@ -301,10 +352,23 @@ window.CaseritasViews.HistorialDia = {
         message.innerHTML = `<div class="message error">${CaseritasUtils.escapeHtml(CaseritasUtils.friendlyApiError(error))}</div>`;
       } finally {
         view.voidInFlight = false;
+        voidForm.querySelector("button[type='submit']").disabled = false;
         renderList();
       }
     }
-
+    voidForm.addEventListener("submit", confirmVoidSale);
+    voidCancelButton.addEventListener("click", closeVoidModal);
+    voidCancelX.addEventListener("click", closeVoidModal);
+    voidModal.addEventListener("click", (event) => {
+      if (event.target === voidModal) {
+        closeVoidModal();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !voidModal.classList.contains("hidden")) {
+        closeVoidModal();
+      }
+    });
     search.addEventListener("input", renderList);
     status.addEventListener("change", loadHistory);
     refreshButton.addEventListener("click", loadHistory);

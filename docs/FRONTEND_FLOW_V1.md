@@ -192,3 +192,46 @@ Reglas UI:
 - Vista Reportes es placeholder.
 - Alta rapida de producto no corresponde al flujo real de datos.
 - No hay comprobante ni historial.
+## Decision Mision 012: Terminal POS, Airtable Admin
+
+Airtable sera el panel administrativo. La web sera exclusivamente la terminal POS de mostrador.
+
+### Alcance Visible Para Cajero
+
+La interfaz principal debe mostrar solamente:
+
+1. Abrir caja cuando no hay caja abierta confirmada por backend.
+2. POS de venta cuando la caja esta abierta.
+3. Estado basico de caja y servidor.
+4. Cierre de caja desde un modal propio.
+
+### Funciones Administrativas Ocultas
+
+Las siguientes funciones no deben aparecer en la navegacion principal del cajero:
+
+- Historial general.
+- Movimientos.
+- Clientes.
+- Productos.
+- Produccion.
+- Caja administrativa.
+- Reportes.
+- Configuracion.
+
+Las rutas y vistas existentes se conservan internamente para compatibilidad, pruebas y mantenimiento.
+
+### Flujo Principal
+
+```txt
+Caja cerrada
+  -> Abrir caja
+  -> Caja confirmada por backend
+  -> POS operativo
+  -> Cobrar ventas
+  -> Cerrar caja
+  -> Volver a apertura
+```
+
+### Regla Operativa
+
+No se muestra el POS operativo hasta que la caja este abierta y confirmada por backend. Si la apertura o el cierre quedan pendientes, el cajero ve un estado de verificacion y no debe repetir la operacion automaticamente.

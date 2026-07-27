@@ -4,7 +4,7 @@ Centro de mando del proyecto CASERITAS OS.
 
 ## Objetivo Actual
 
-Convertir CASERITAS OS en un sistema POS completo para pequenos comercios de Uruguay, capaz de abrir caja, vender durante todo el dia, controlar stock, registrar caja, consultar historial, anular ventas y cerrar jornada con trazabilidad.
+Convertir CASERITAS OS en una terminal POS simple para pequenos comercios de Uruguay. Airtable sera el panel administrativo; la web se usara para abrir caja, vender, consultar estado basico y cerrar caja.
 
 ## Estado Del Proyecto
 
@@ -69,15 +69,15 @@ Todavia falta validar la operacion real completa con n8n/Airtable cuando haya ej
 
 ## Ultima Mision
 
-MISION 009: Certificacion Pre-Produccion.
+MISION 012: Simplificacion para operacion real.
 
 Resultado:
 
-- Plan piloto creado.
-- Checklist Go Live creada.
-- Guia de instalacion creada.
-- Runbook operativo creado.
-- Estado del proyecto cambiado a PRE-PRODUCCION.
+- Decision de producto: Airtable sera el panel administrativo.
+- La web queda enfocada exclusivamente como terminal POS de mostrador.
+- La navegacion administrativa se oculta del flujo normal del cajero.
+- El flujo principal pasa a ser: caja cerrada -> apertura -> POS -> cierre.
+- Las rutas y vistas administrativas se conservan internamente para no romper compatibilidad.
 
 ## Proxima Mision
 

@@ -6,8 +6,8 @@
 |------|--------|-----------|---------|--------------|
 | Auditoria y documentacion | CERTIFICADO | Commit `8f36c23` | Ninguno | Importar `/productos` |
 | GitHub como fuente de verdad | CERTIFICADO | `main` actualizado; URL raw HTTP 200 | Ninguno | Mantener workflows IaC |
-| Workflow `/productos` publicado | LISTO PARA IMPORTAR | `workflow_productos.json` publicado en GitHub | Importacion n8n | Importar desde URL |
-| `/productos` en produccion | PENDIENTE | Sin evidencia de JSON real desde n8n | Importar y activar | Certificar endpoint |
+| Workflow `/productos` publicado | IMPORTADO | `workflow_productos.json` publicado e importado en n8n Cloud | Ninguno | Validar ejecucion productiva |
+| `/productos` en produccion | BLOQUEADO | Workflow importado; ejecuciones fallan con `Execution limit reached. Consider upgrading your plan.` | BLOQUEADO POR INFRAESTRUCTURA: limite del plan n8n | Validar/restablecer ejecuciones disponibles en n8n |
 | `/producto` | PENDIENTE | Sin evidencia | `/productos` pendiente | Preparar despues |
 | `/caja/estado` | PENDIENTE | 404 publico | Workflow pendiente | Preparar despues |
 | `/caja/abrir` | PENDIENTE | Sin certificacion | Estado de caja | Preparar despues |
@@ -33,7 +33,7 @@
 - HTTP raw: `200`
 - JSON raw: valido
 - Rama publicada: `Webhook GET /productos -> Validacion -> Airtable -> Normalizacion -> Respond to Webhook`
-- Estado n8n: pendiente de importar y activar
+- Estado n8n: importado; bloqueado por limite de ejecuciones del plan
 ## Clasificacion de elementos auditados Caseritas POS v1.0 Certificacion
 
 | Elemento | Estado | Evidencia | Bloqueo | Proximo paso |

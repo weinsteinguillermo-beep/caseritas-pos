@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-28 - n8n infrastructure block
+
+### Changed
+
+- Marked `/productos` production certification as blocked by n8n infrastructure.
+- Registered `Execution limit reached. Consider upgrading your plan.` as the active release blocker.
 ## 2026-07-28 - Release management v1.0
 
 ### Added

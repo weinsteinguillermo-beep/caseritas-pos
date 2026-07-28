@@ -1,4 +1,15 @@
-﻿# Changelog
+# Changelog
+
+## 2026-07-28 - Release management v1.0
+
+### Added
+
+- `VISION.md` with the product vision and v1.0 release rule.
+- Release milestone board for Caseritas POS v1.0 certification.
+
+### Updated
+
+- `/productos` release status marked as `LISTO PARA IMPORTAR` with raw GitHub URL evidence.
 
 ## 2026-07-28 - Etapa 0 v1.0
 

@@ -1,4 +1,40 @@
-﻿# Caseritas POS v1.0 Certificacion
+# Caseritas POS v1.0 Certificacion
+
+## Tablero de release
+
+| Hito | Estado | Evidencia | Bloqueo | Proximo paso |
+|------|--------|-----------|---------|--------------|
+| Auditoria y documentacion | CERTIFICADO | Commit `8f36c23` | Ninguno | Importar `/productos` |
+| GitHub como fuente de verdad | CERTIFICADO | `main` actualizado; URL raw HTTP 200 | Ninguno | Mantener workflows IaC |
+| Workflow `/productos` publicado | LISTO PARA IMPORTAR | `workflow_productos.json` publicado en GitHub | Importacion n8n | Importar desde URL |
+| `/productos` en produccion | PENDIENTE | Sin evidencia de JSON real desde n8n | Importar y activar | Certificar endpoint |
+| `/producto` | PENDIENTE | Sin evidencia | `/productos` pendiente | Preparar despues |
+| `/caja/estado` | PENDIENTE | 404 publico | Workflow pendiente | Preparar despues |
+| `/caja/abrir` | PENDIENTE | Sin certificacion | Estado de caja | Preparar despues |
+| `/venta` | PENDIENTE | Body vacio | Endpoints previos | Preparar despues |
+| `/caja/cerrar` | PENDIENTE | Sin certificacion | Venta pendiente | Preparar despues |
+| Prueba integral | PENDIENTE | Sin evidencia | Endpoints | Ejecutar circuito |
+| Primera venta real | PENDIENTE | Sin evidencia | Prueba integral | Vender |
+| Release v1.0 | PENDIENTE | Sin evidencia | Primera venta | Crear release |
+
+## Estados validos
+
+- PENDIENTE
+- EN PREPARACION
+- LISTO PARA IMPORTAR
+- IMPORTADO
+- EN PRUEBA
+- CERTIFICADO
+- BLOQUEADO
+
+## Evidencia actual del hito `/productos`
+
+- URL raw: `https://raw.githubusercontent.com/weinsteinguillermo-beep/caseritas-pos/main/n8n-workflows/workflow_productos.json`
+- HTTP raw: `200`
+- JSON raw: valido
+- Rama publicada: `Webhook GET /productos -> Validacion -> Airtable -> Normalizacion -> Respond to Webhook`
+- Estado n8n: pendiente de importar y activar
+## Clasificacion de elementos auditados Caseritas POS v1.0 Certificacion
 
 | Elemento | Estado | Evidencia | Bloqueo | Proximo paso |
 |----------|--------|-----------|---------|--------------|

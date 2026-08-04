@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-08-04 - Producto lookup workflow
+
+### Added
+
+- `n8n-workflows/workflow_producto.json` ready for n8n Cloud Import from URL.
+- `GET /producto?code=...` workflow with validation, Airtable lookup, normalization, CORS and JSON responses.
+
+### Status
+
+- `/producto`: LISTO PARA IMPORTAR.
+- Not certified in production because n8n execution availability remains the active infrastructure blocker.
+
 ## 2026-08-04 - POS demo mode
 
 ### Added

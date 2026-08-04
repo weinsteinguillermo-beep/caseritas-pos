@@ -1,0 +1,165 @@
+{
+    "name":  "Caseritas POS - Producto por Codigo",
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "httpMethod":  "GET",
+                                         "path":  "producto",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "webhook-producto-codigo",
+                      "name":  "Webhook",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "webhookId":  "caseritas-producto-codigo"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const code = String($json.query?.code || \u0027\u0027).trim();\nconst safeCode = code.replace(/\\\\/g, \u0027\\\\\\\\\u0027).replace(/\"/g, \u0027\\\\\"\u0027);\n\nif (!code) {\n  return [\n    {\n      json: {\n        ok: false,\n        validationError: true,\n        error: \u0027PRODUCT_CODE_REQUIRED\u0027,\n        message: \u0027Ingresa un codigo de barras valido\u0027,\n        code: \u0027\u0027\n      }\n    }\n  ];\n}\n\nreturn [\n  {\n    json: {\n      ok: true,\n      code,\n      formula: `({Codigo de Barras} \u0026 \"\") = \"${safeCode}\"`\n    }\n  }\n];"
+                                     },
+                      "id":  "validacion-producto-codigo",
+                      "name":  "Validacion",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       260,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "search",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "tblyBp7gm4Lheqr7s",
+                                                       "mode":  "id"
+                                                   },
+                                         "filterByFormula":  "={{$json.formula}}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "airtable-producto-produccion",
+                      "name":  "Airtable",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       520,
+                                       0
+                                   ],
+                      "alwaysOutputData":  true,
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const validation = $items(\u0027Validacion\u0027)[0]?.json || {};\n\n  if (validation.validationError) {\n    return [\n      {\n        json: {\n          ok: false,\n          error: validation.error || \u0027PRODUCT_CODE_REQUIRED\u0027,\n          message: validation.message || \u0027Ingresa un codigo de barras valido\u0027\n        }\n      }\n    ];\n  }\n\n  const airtableItems = $items(\u0027Airtable\u0027);\n  const airtableError = airtableItems.find(item =\u003e item.json \u0026\u0026 (item.json.error || item.json.message) \u0026\u0026 !item.json.id);\n\n  if (airtableError) {\n    return [\n      {\n        json: {\n          ok: false,\n          error: \u0027PRODUCT_LOOKUP_ERROR\u0027,\n          message: \u0027No se pudo consultar el producto\u0027\n        }\n      }\n    ];\n  }\n\n  const item = airtableItems.find(entry =\u003e entry.json \u0026\u0026 entry.json.id);\n\n  if (!item) {\n    return [\n      {\n        json: {\n          ok: true,\n          producto: null\n        }\n      }\n    ];\n  }\n\n  const record = item.json.fields || item.json;\n  const barcode = record[\u0027Codigo de Barras\u0027];\n\n  return [\n    {\n      json: {\n        ok: true,\n        producto: {\n          id: item.json.id,\n          name: record.Name || \u0027\u0027,\n          barcode: barcode?.text || barcode || \u0027\u0027,\n          price: Number(record.Importe || record[\u0027Precio x Kg\u0027] || 0),\n          weight: Number(record.Peso || 0),\n          stock: Number(record[\u0027Stock Actual\u0027] || 0)\n        }\n      }\n    }\n  ];\n} catch (error) {\n  return [\n    {\n      json: {\n        ok: false,\n        error: \u0027PRODUCT_LOOKUP_ERROR\u0027,\n        message: \u0027No se pudo consultar el producto\u0027\n      }\n    }\n  ];\n}"
+                                     },
+                      "id":  "normalizacion-producto-codigo",
+                      "name":  "Normalizacion",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       780,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{$json}}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Methods",
+                                                                                                     "value":  "GET,POST,OPTIONS"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Headers",
+                                                                                                     "value":  "Content-Type, Authorization"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     },
+                      "id":  "respond-producto-codigo",
+                      "name":  "Respond to Webhook",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       1040,
+                                       0
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "Webhook":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "Validacion",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "Validacion":  {
+                                           "main":  [
+                                                        [
+                                                            {
+                                                                "node":  "Airtable",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ]
+                                                    ]
+                                       },
+                        "Airtable":  {
+                                         "main":  [
+                                                      [
+                                                          {
+                                                              "node":  "Normalizacion",
+                                                              "type":  "main",
+                                                              "index":  0
+                                                          }
+                                                      ]
+                                                  ]
+                                     },
+                        "Normalizacion":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Respond to Webhook",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          }
+                    },
+    "pinData":  {
+
+                },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "active":  false,
+    "versionId":  "caseritas-producto-codigo-iac-v1"
+}

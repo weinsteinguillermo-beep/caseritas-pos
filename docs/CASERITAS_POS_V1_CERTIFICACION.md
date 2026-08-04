@@ -8,7 +8,7 @@
 | GitHub como fuente de verdad | CERTIFICADO | `main` actualizado; URL raw HTTP 200 | Ninguno | Mantener workflows IaC |
 | Workflow `/productos` publicado | IMPORTADO | `workflow_productos.json` publicado e importado en n8n Cloud | Ninguno | Validar ejecucion productiva |
 | `/productos` en produccion | BLOQUEADO | Workflow importado; ejecuciones fallan con `Execution limit reached. Consider upgrading your plan.` | BLOQUEADO POR INFRAESTRUCTURA: limite del plan n8n | Validar/restablecer ejecuciones disponibles en n8n |
-| `/producto` | PENDIENTE | Sin evidencia | `/productos` pendiente | Preparar despues |
+| `/producto` | LISTO PARA IMPORTAR | `workflow_producto.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva | Importar cuando n8n tenga ejecuciones disponibles |
 | `/caja/estado` | PENDIENTE | 404 publico | Workflow pendiente | Preparar despues |
 | `/caja/abrir` | PENDIENTE | Sin certificacion | Estado de caja | Preparar despues |
 | `/venta` | PENDIENTE | Body vacio | Endpoints previos | Preparar despues |
@@ -35,6 +35,16 @@
 - CERTIFICADO
 - BLOQUEADO
 
+## Evidencia actual del hito `/producto`
+
+- Estado: LISTO PARA IMPORTAR.
+- Archivo: `n8n-workflows/workflow_producto.json`.
+- URL raw objetivo: `https://raw.githubusercontent.com/weinsteinguillermo-beep/caseritas-pos/main/n8n-workflows/workflow_producto.json`.
+- Contrato: `GET /producto?code=...` devuelve `{ "ok": true, "producto": {...} }` o `{ "ok": true, "producto": null }`.
+- Tabla Airtable: `PRODUCCION` (`tblyBp7gm4Lheqr7s`).
+- Campos usados: `Name`, `Codigo de Barras`, `Importe`, `Precio x Kg`, `Peso`, `Stock Actual`.
+- Estado productivo: no certificado; pendiente de importar y probar en n8n Cloud cuando existan ejecuciones disponibles.
+
 ## Evidencia actual del hito `/productos`
 
 - URL raw: `https://raw.githubusercontent.com/weinsteinguillermo-beep/caseritas-pos/main/n8n-workflows/workflow_productos.json`
@@ -52,7 +62,7 @@
 | Fetch aislado | CERTIFICADO | `fetch()` solo encontrado en `js/api.js` | Ninguno | Mantener regla |
 | `/productos` workflow IaC | LISTO PARA IMPORTAR | `n8n-workflows/workflow_productos.json`; JSON valido; una rama GET `/productos` | Falta importar/activar en n8n Cloud | Guillermo debe importar y activar |
 | `/productos` produccion | BLOQUEADO | HTTP 200, Content-Length 0, body vacio | Workflow activo n8n no coincide o no responde desde Respond | Reemplazar workflow activo por IaC |
-| `/producto` local | EN DESARROLLO | `n8n-workflows/producto.json` existe | Tiene cambios locales no commiteados; no certificado | Auditar en ETAPA 2 |
+| `/producto` workflow IaC | LISTO PARA IMPORTAR | `n8n-workflows/workflow_producto.json`; JSON valido; una rama GET `/producto` | Falta importar/activar y probar en n8n Cloud | Importar desde URL raw |
 | `/producto` produccion | BLOQUEADO | HTTP 200, body vacio | Workflow activo no responde JSON util | No avanzar hasta certificar `/productos` |
 | `/caja/estado` local | PENDIENTE | `n8n-workflows/caja-estado.json` existe | No certificado como IaC v1.0 | Auditar en ETAPA 3 |
 | `/caja/estado` produccion | BLOQUEADO | HTTP 404 | Endpoint no activo/publicado | No avanzar hasta certificar `/producto` |

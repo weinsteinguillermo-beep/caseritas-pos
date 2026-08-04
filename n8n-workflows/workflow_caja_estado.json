@@ -1,0 +1,165 @@
+{
+    "name":  "Caseritas POS - Estado de Caja",
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "caja/estado",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "webhook-caja-estado",
+                      "name":  "Webhook",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "webhookId":  "caseritas-caja-estado"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const source = $json.body ?? $json;\nlet body = source;\n\nif (typeof body === \u0027string\u0027) {\n  try {\n    body = JSON.parse(body);\n  } catch (error) {\n    body = {};\n  }\n}\n\nconst empresaId = String(body.empresaId || \u0027\u0027).trim();\nconst usuarioId = String(body.usuarioId || \u0027\u0027).trim();\nconst cajaId = String(body.cajaId || \u0027\u0027).trim();\nconst missingRequired = !empresaId || !usuarioId || !cajaId;\n\nconst escapeFormula = (value) =\u003e String(value).replace(/\\\\/g, \u0027\\\\\\\\\u0027).replace(/\"/g, \u0027\\\\\"\u0027);\nconst formula = missingRequired\n  ? \u0027FALSE()\u0027\n  : `AND(({empresa_id} \u0026 \"\") = \"${escapeFormula(empresaId)}\", ({usuario_id} \u0026 \"\") = \"${escapeFormula(usuarioId)}\", ({caja_id} \u0026 \"\") = \"${escapeFormula(cajaId)}\", ({estado} \u0026 \"\") = \"ABIERTA\")`;\n\nreturn [\n  {\n    json: {\n      ok: !missingRequired,\n      validationError: missingRequired,\n      error: missingRequired ? \u0027INVALID_PAYLOAD\u0027 : null,\n      message: missingRequired ? \u0027Faltan datos obligatorios para consultar la caja\u0027 : null,\n      empresaId,\n      usuarioId,\n      cajaId,\n      formula\n    }\n  }\n];"
+                                     },
+                      "id":  "validacion-caja-estado",
+                      "name":  "Validacion",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       260,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "search",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "SESIONES_CAJA",
+                                                       "mode":  "name"
+                                                   },
+                                         "filterByFormula":  "={{$json.formula}}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "airtable-sesiones-caja",
+                      "name":  "Airtable",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       520,
+                                       0
+                                   ],
+                      "alwaysOutputData":  true,
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const validation = $items(\u0027Validacion\u0027)[0]?.json || {};\n\n  if (validation.validationError) {\n    return [\n      {\n        json: {\n          ok: false,\n          error: \u0027INVALID_PAYLOAD\u0027,\n          message: \u0027Faltan datos obligatorios para consultar la caja\u0027\n        }\n      }\n    ];\n  }\n\n  const airtableItems = $items(\u0027Airtable\u0027);\n  const airtableError = airtableItems.find(item =\u003e item.json \u0026\u0026 (item.json.error || item.json.message) \u0026\u0026 !item.json.id);\n\n  if (airtableError) {\n    return [\n      {\n        json: {\n          ok: false,\n          error: \u0027CASH_STATUS_ERROR\u0027,\n          message: \u0027No se pudo consultar el estado de la caja\u0027\n        }\n      }\n    ];\n  }\n\n  const sessions = airtableItems\n    .filter(item =\u003e item.json \u0026\u0026 item.json.id)\n    .map(item =\u003e ({ id: item.json.id, fields: item.json.fields || item.json }))\n    .sort((a, b) =\u003e new Date(b.fields.fecha_apertura || 0) - new Date(a.fields.fecha_apertura || 0));\n\n  if (sessions.length \u003e 1) {\n    return [\n      {\n        json: {\n          ok: false,\n          error: \u0027MULTIPLE_OPEN_SESSIONS\u0027,\n          message: \u0027Existen varias sesiones abiertas para la misma caja\u0027\n        }\n      }\n    ];\n  }\n\n  if (sessions.length === 0) {\n    return [\n      {\n        json: {\n          ok: true,\n          abierta: false,\n          cajaSesionId: null,\n          empresaId: validation.empresaId,\n          usuarioId: validation.usuarioId,\n          cajaId: validation.cajaId\n        }\n      }\n    ];\n  }\n\n  const session = sessions[0];\n  const fields = session.fields;\n\n  return [\n    {\n      json: {\n        ok: true,\n        abierta: true,\n        cajaSesionId: session.id,\n        empresaId: validation.empresaId,\n        usuarioId: validation.usuarioId,\n        cajaId: validation.cajaId,\n        fondoInicial: Number(fields.fondo_inicial || 0),\n        fechaApertura: fields.fecha_apertura || null,\n        estado: fields.estado || \u0027ABIERTA\u0027\n      }\n    }\n  ];\n} catch (error) {\n  return [\n    {\n      json: {\n        ok: false,\n        error: \u0027CASH_STATUS_ERROR\u0027,\n        message: \u0027No se pudo consultar el estado de la caja\u0027\n      }\n    }\n  ];\n}"
+                                     },
+                      "id":  "normalizacion-caja-estado",
+                      "name":  "Normalizacion",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       780,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{$json}}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Methods",
+                                                                                                     "value":  "GET,POST,OPTIONS"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Headers",
+                                                                                                     "value":  "Content-Type, Authorization"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     },
+                      "id":  "respond-caja-estado",
+                      "name":  "Respond to Webhook",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       1040,
+                                       0
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "Webhook":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "Validacion",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "Validacion":  {
+                                           "main":  [
+                                                        [
+                                                            {
+                                                                "node":  "Airtable",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ]
+                                                    ]
+                                       },
+                        "Airtable":  {
+                                         "main":  [
+                                                      [
+                                                          {
+                                                              "node":  "Normalizacion",
+                                                              "type":  "main",
+                                                              "index":  0
+                                                          }
+                                                      ]
+                                                  ]
+                                     },
+                        "Normalizacion":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Respond to Webhook",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          }
+                    },
+    "pinData":  {
+
+                },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "active":  false,
+    "versionId":  "caseritas-caja-estado-iac-v1"
+}

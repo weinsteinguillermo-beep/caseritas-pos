@@ -9,7 +9,7 @@
 | Workflow `/productos` publicado | IMPORTADO | `workflow_productos.json` publicado e importado en n8n Cloud | Ninguno | Validar ejecucion productiva |
 | `/productos` en produccion | BLOQUEADO | Workflow importado; ejecuciones fallan con `Execution limit reached. Consider upgrading your plan.` | BLOQUEADO POR INFRAESTRUCTURA: limite del plan n8n | Validar/restablecer ejecuciones disponibles en n8n |
 | `/producto` | LISTO PARA IMPORTAR | `workflow_producto.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva | Importar cuando n8n tenga ejecuciones disponibles |
-| `/caja/estado` | PENDIENTE | 404 publico | Workflow pendiente | Preparar despues |
+| `/caja/estado` | LISTO PARA IMPORTAR | `workflow_caja_estado.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva | Importar cuando n8n tenga ejecuciones disponibles |
 | `/caja/abrir` | PENDIENTE | Sin certificacion | Estado de caja | Preparar despues |
 | `/venta` | PENDIENTE | Body vacio | Endpoints previos | Preparar despues |
 | `/caja/cerrar` | PENDIENTE | Sin certificacion | Venta pendiente | Preparar despues |
@@ -34,6 +34,18 @@
 - EN PRUEBA
 - CERTIFICADO
 - BLOQUEADO
+
+
+## Evidencia actual del hito `/caja/estado`
+
+- Estado: LISTO PARA IMPORTAR.
+- Archivo: `n8n-workflows/workflow_caja_estado.json`.
+- URL raw objetivo: `https://raw.githubusercontent.com/weinsteinguillermo-beep/caseritas-pos/main/n8n-workflows/workflow_caja_estado.json`.
+- Contrato: `POST /caja/estado` con `empresaId`, `usuarioId` y `cajaId`.
+- Tabla Airtable: `SESIONES_CAJA` por nombre, porque el Table ID sigue pendiente en `docs/DATABASE.md`.
+- Campos usados: `empresa_id`, `usuario_id`, `caja_id`, `estado`, `fondo_inicial`, `fecha_apertura`.
+- Reglas: devuelve cerrada si no hay sesion abierta y error `MULTIPLE_OPEN_SESSIONS` si hay mas de una.
+- Estado productivo: no certificado; pendiente de importar y probar en n8n Cloud cuando existan ejecuciones disponibles.
 
 ## Evidencia actual del hito `/producto`
 
@@ -64,7 +76,7 @@
 | `/productos` produccion | BLOQUEADO | HTTP 200, Content-Length 0, body vacio | Workflow activo n8n no coincide o no responde desde Respond | Reemplazar workflow activo por IaC |
 | `/producto` workflow IaC | LISTO PARA IMPORTAR | `n8n-workflows/workflow_producto.json`; JSON valido; una rama GET `/producto` | Falta importar/activar y probar en n8n Cloud | Importar desde URL raw |
 | `/producto` produccion | BLOQUEADO | HTTP 200, body vacio | Workflow activo no responde JSON util | No avanzar hasta certificar `/productos` |
-| `/caja/estado` local | PENDIENTE | `n8n-workflows/caja-estado.json` existe | No certificado como IaC v1.0 | Auditar en ETAPA 3 |
+| `/caja/estado` workflow IaC | LISTO PARA IMPORTAR | `n8n-workflows/workflow_caja_estado.json`; JSON valido; una rama POST `/caja/estado` | Falta importar/activar y probar en n8n Cloud | Importar desde URL raw |
 | `/caja/estado` produccion | BLOQUEADO | HTTP 404 | Endpoint no activo/publicado | No avanzar hasta certificar `/producto` |
 | `/caja/abrir` local | PENDIENTE | `n8n-workflows/caja-abrir.json` existe | No certificado como IaC v1.0 | Auditar en ETAPA 4 |
 | `/caja/abrir` produccion | BLOQUEADO | Pruebas previas dieron HTTP 404 | Endpoint no activo/publicado | No avanzar hasta certificar `/caja/estado` |

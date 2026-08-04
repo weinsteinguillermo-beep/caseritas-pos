@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-08-04 - Cash status workflow
+
+### Added
+
+- `n8n-workflows/workflow_caja_estado.json` ready for n8n Cloud Import from URL.
+- `POST /caja/estado` workflow with payload validation, `SESIONES_CAJA` lookup, duplicate-session guard, CORS and JSON responses.
+
+### Status
+
+- `/caja/estado`: LISTO PARA IMPORTAR.
+- Not certified in production because n8n execution availability remains the active infrastructure blocker.
+
 ## 2026-08-04 - Producto lookup workflow
 
 ### Added

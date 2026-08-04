@@ -11,7 +11,7 @@
 | `/producto` | LISTO PARA IMPORTAR | `workflow_producto.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva | Importar cuando n8n tenga ejecuciones disponibles |
 | `/caja/estado` | LISTO PARA IMPORTAR | `workflow_caja_estado.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva | Importar cuando n8n tenga ejecuciones disponibles |
 | `/caja/abrir` | LISTO PARA IMPORTAR | `workflow_caja_abrir.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva; Table ID `SESIONES_CAJA` pendiente | Importar cuando n8n tenga ejecuciones disponibles |
-| `/venta` | PENDIENTE | Body vacio | Endpoints previos | Preparar despues |
+| `/venta` | LISTO PARA IMPORTAR | `workflow_venta.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva; Table IDs transaccionales pendientes | Importar cuando n8n tenga ejecuciones disponibles |
 | `/caja/cerrar` | PENDIENTE | Sin certificacion | Venta pendiente | Preparar despues |
 | Prueba integral | PENDIENTE | Sin evidencia | Endpoints | Ejecutar circuito |
 | Primera venta real | PENDIENTE | Sin evidencia | Prueba integral | Vender |
@@ -26,6 +26,17 @@
 - Alcance validado: inicia desde "Ver demostracion", simula busqueda, muestra productos locales, agrega productos, modifica cantidades, selecciona efectivo, cobra, muestra ticket, espera 5 segundos, reinicia y puede detenerse desde el boton.
 - Aislamiento: datos locales simulados; sin n8n, sin Airtable, sin contratos API y sin ejecucion automatica al abrir el POS.
 
+
+## Evidencia actual del hito `/venta`
+
+- Estado: LISTO PARA IMPORTAR.
+- Archivo: `n8n-workflows/workflow_venta.json`.
+- URL raw objetivo: `https://raw.githubusercontent.com/weinsteinguillermo-beep/caseritas-pos/main/n8n-workflows/workflow_venta.json`.
+- Contrato: `POST /venta` con `operationId`, `empresaId`, `cajaId`, `cajaSesionId`, `cashier`, `customerId`, `customerName`, `items`, `paymentMethod`, `discountPercent` y `cashReceived`.
+- Tablas Airtable con ID confirmado: `VENTAS` (`tbleU4MHRm3Z2iRcY`) y `PRODUCCION` (`tblyBp7gm4Lheqr7s`).
+- Tablas Airtable por nombre con Table ID pendiente: `SESIONES_CAJA`, `DETALLE_VENTA`, `MOVIMIENTOS_STOCK`, `MOVIMIENTOS_CAJA`.
+- Reglas: valida payload, idempotencia por `OperationId`, caja abierta, productos existentes, stock suficiente, recalculo backend de precios y total, creacion de venta pendiente, detalle, movimientos de stock, descuento de stock, movimiento de caja, confirmacion y compensacion controlada.
+- Estado productivo: no certificado; pendiente de importar y probar en n8n Cloud cuando existan ejecuciones disponibles.
 ## Evidencia actual del hito `/caja/abrir`
 
 - Estado: LISTO PARA IMPORTAR.
@@ -91,7 +102,7 @@
 | `/caja/estado` produccion | BLOQUEADO | HTTP 404 | Endpoint no activo/publicado | No avanzar hasta certificar `/producto` |
 | `/caja/abrir` local | PENDIENTE | `n8n-workflows/caja-abrir.json` existe | No certificado como IaC v1.0 | Auditar en ETAPA 4 |
 | `/caja/abrir` produccion | BLOQUEADO | Pruebas previas dieron HTTP 404 | Endpoint no activo/publicado | No avanzar hasta certificar `/caja/estado` |
-| `/venta` local | PENDIENTE | `n8n-workflows/venta.json` existe con venta, detalle, stock, caja y rollback | No certificado con Airtable real | Auditar en ETAPA 5 |
+| `/venta` workflow IaC | LISTO PARA IMPORTAR | `n8n-workflows/workflow_venta.json`; JSON valido; POST `/venta` con idempotencia, caja, stock, detalle, caja y compensacion | Falta importar/activar y probar en n8n Cloud | Importar desde URL raw |
 | `/venta` produccion | BLOQUEADO | HTTP 200, body vacio ante payload invalido sin escritura | Workflow activo no responde JSON util | No avanzar hasta certificar caja |
 | `/caja/cerrar` local | PENDIENTE | `n8n-workflows/caja-cerrar.json` existe | No certificado | Auditar en ETAPA 6 |
 | POS apertura | REQUIERE CERTIFICACION | `views/pos.js` llama `/caja/abrir` y recupera pendiente con `/caja/estado` | Endpoints caja no certificados | Probar luego de importar workflows |

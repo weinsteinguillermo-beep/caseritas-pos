@@ -93,6 +93,8 @@ Notes:
 
 ## DETALLE_VENTA
 
+DETALLE_VENTA Table ID real: PENDIENTE DE CONFIRMACION EN AIRTABLE. Los workflows IaC usan el nombre DETALLE_VENTA hasta que el ID quede confirmado.
+
 Status: required for Sprint 1 sale engine. Table ID pending after Airtable creation.
 
 Purpose: stores one row per sold product.
@@ -195,6 +197,8 @@ operation_id_cierre
 
 ## MOVIMIENTOS_CAJA
 
+MOVIMIENTOS_CAJA Table ID real: PENDIENTE DE CONFIRMACION EN AIRTABLE. Los workflows IaC usan el nombre MOVIMIENTOS_CAJA hasta que el ID quede confirmado.
+
 Status: required for Caja Real. Table ID pending after Airtable creation.
 
 Purpose: stores every cash/payment movement.
@@ -248,6 +252,8 @@ Notes:
 - The old `CAJA` table must not continue mixing sessions and movements for production.
 
 ## MOVIMIENTOS_STOCK
+
+MOVIMIENTOS_STOCK Table ID real: PENDIENTE DE CONFIRMACION EN AIRTABLE. Los workflows IaC usan el nombre MOVIMIENTOS_STOCK hasta que el ID quede confirmado.
 
 Status: required for Sprint 1 sale engine. Table ID pending after Airtable creation.
 

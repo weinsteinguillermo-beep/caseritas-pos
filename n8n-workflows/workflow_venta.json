@@ -1,0 +1,1693 @@
+{
+    "name":  "Caseritas POS - Venta",
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "venta",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "webhook-venta",
+                      "name":  "Webhook",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "webhookId":  "caseritas-venta"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const raw = $json.body ?? $json;\nlet body = raw;\n\nif (typeof body === \u0027string\u0027) {\n  try {\n    body = JSON.parse(body);\n  } catch (error) {\n    body = {};\n  }\n}\n\nconst text = (value) =\u003e String(value ?? \u0027\u0027).trim();\nconst money = (value) =\u003e {\n  const parsed = Number(value);\n  return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : NaN;\n};\nconst escapeFormula = (value) =\u003e String(value).replace(/\\\\/g, \u0027\\\\\\\\\u0027).replace(/\"/g, \u0027\\\\\"\u0027);\nconst fail = (error, message, extra = {}) =\u003e [{ json: { ok: false, error, message, ...extra } }];\n\nconst operationId = text(body.operationId);\nconst empresaId = text(body.empresaId);\nconst cajaId = text(body.cajaId);\nconst cajaSesionId = text(body.cajaSesionId);\nconst cashier = text(body.cashier || body.usuarioId);\nconst customerId = text(body.customerId) || null;\nconst customerName = text(body.customerName) || \u0027Consumidor final\u0027;\nconst paymentMethod = text(body.paymentMethod).toLowerCase();\nconst allowedPayments = [\u0027cash\u0027, \u0027card\u0027, \u0027transfer\u0027, \u0027efectivo\u0027, \u0027tarjeta\u0027, \u0027transferencia\u0027];\nconst discountPercent = money(body.discountPercent ?? 0);\nconst cashReceived = money(body.cashReceived ?? 0);\nconst receivedItems = Array.isArray(body.items) ? body.items : [];\n\nif (!operationId || !empresaId || !cajaSesionId || !cashier || receivedItems.length === 0 || !allowedPayments.includes(paymentMethod)) {\n  return fail(\u0027INVALID_PAYLOAD\u0027, \u0027Faltan datos obligatorios para registrar la venta\u0027);\n}\n\nif (!Number.isFinite(discountPercent) || discountPercent \u003c 0 || discountPercent \u003e 100) {\n  return fail(\u0027INVALID_PAYLOAD\u0027, \u0027Faltan datos obligatorios para registrar la venta\u0027);\n}\n\nconst normalizedItems = [];\nfor (const item of receivedItems) {\n  const productId = text(item.productId || item.id);\n  const quantity = Number(item.quantity);\n  if (!productId || !Number.isFinite(quantity) || quantity \u003c= 0) {\n    return fail(\u0027INVALID_PAYLOAD\u0027, \u0027Faltan datos obligatorios para registrar la venta\u0027);\n  }\n  normalizedItems.push({ productId, quantity });\n}\n\nif ((paymentMethod === \u0027cash\u0027 || paymentMethod === \u0027efectivo\u0027) \u0026\u0026 (!Number.isFinite(cashReceived) || cashReceived \u003c 0)) {\n  return fail(\u0027INVALID_PAYLOAD\u0027, \u0027Faltan datos obligatorios para registrar la venta\u0027);\n}\n\nconst productFormula = `OR(${normalizedItems.map((item) =\u003e `RECORD_ID() = \"${escapeFormula(item.productId)}\"`).join(\u0027, \u0027)})`;\n\nreturn [{\n  json: {\n    ok: true,\n    operationId,\n    empresaId,\n    cajaId,\n    cajaSesionId,\n    cashier,\n    customerId,\n    customerName,\n    paymentMethod,\n    discountPercent,\n    cashReceived,\n    createdAt: (() =\u003e { const candidate = body.createdAt ? new Date(body.createdAt) : new Date(); return Number.isNaN(candidate.getTime()) ? new Date().toISOString() : candidate.toISOString(); })(),\n    items: normalizedItems,\n    operationFormula: `({OperationId} \u0026 \"\") = \"${escapeFormula(operationId)}\"`,\n    cashSessionFormula: `AND(RECORD_ID() = \"${escapeFormula(cajaSesionId)}\", ({estado} \u0026 \"\") = \"ABIERTA\")`,\n    productFormula\n  }\n}];"
+                                     },
+                      "id":  "validacion",
+                      "name":  "Validacion",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       260,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.ok === true}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "payload-valido",
+                      "name":  "PayloadValido",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       520,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "search",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "tbleU4MHRm3Z2iRcY",
+                                                       "mode":  "id"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "filterByFormula":  "={{$json.operationFormula}}"
+                                     },
+                      "id":  "buscar-venta-operation-id",
+                      "name":  "BuscarVentaOperationId",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       780,
+                                       -160
+                                   ],
+                      "continueOnFail":  true,
+                      "alwaysOutputData":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const validation = $items(\u0027Validacion\u0027)[0]?.json || {};\n  const rows = $items(\u0027BuscarVentaOperationId\u0027);\n  const queryError = rows.find((item) =\u003e item.json \u0026\u0026 (item.json.error || item.json.message) \u0026\u0026 !item.json.id);\n\n  if (queryError) {\n    return [{ json: { ok: false, processable: false, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027 } }];\n  }\n\n  const existing = rows.find((item) =\u003e item.json \u0026\u0026 item.json.id);\n  if (!existing) {\n    return [{ json: { ...validation, processable: true } }];\n  }\n\n  const fields = existing.json.fields || existing.json;\n  const estado = String(fields.Estado || \u0027\u0027).toUpperCase();\n  const total = Number(fields.Total || 0);\n\n  if (estado === \u0027CONFIRMADA\u0027) {\n    return [{ json: { ok: true, processable: false, ventaId: existing.json.id, operationId: validation.operationId, total, idempotent: true } }];\n  }\n\n  return [{ json: { ok: false, processable: false, error: \u0027SALE_ALREADY_EXISTS\u0027, message: \u0027Ya existe una venta con este OperationId y no se creara un duplicado\u0027, ventaId: existing.json.id, operationId: validation.operationId, estado: estado || \u0027PENDIENTE\u0027 } }];\n} catch (error) {\n  return [{ json: { ok: false, processable: false, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027 } }];\n}"
+                                     },
+                      "id":  "decidir-idempotencia",
+                      "name":  "DecidirIdempotencia",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1040,
+                                       -160
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.processable === true}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "puede-procesar",
+                      "name":  "PuedeProcesar",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1300,
+                                       -160
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "search",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "SESIONES_CAJA",
+                                                       "mode":  "name"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "filterByFormula":  "={{$json.cashSessionFormula}}"
+                                     },
+                      "id":  "buscar-caja-abierta",
+                      "name":  "BuscarCajaAbierta",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       1560,
+                                       -260
+                                   ],
+                      "continueOnFail":  true,
+                      "alwaysOutputData":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const sale = $items(\u0027DecidirIdempotencia\u0027)[0]?.json || {};\n  const rows = $items(\u0027BuscarCajaAbierta\u0027);\n  const queryError = rows.find((item) =\u003e item.json \u0026\u0026 (item.json.error || item.json.message) \u0026\u0026 !item.json.id);\n  if (queryError) {\n    return [{ json: { ok: false, cashOpen: false, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027 } }];\n  }\n  const session = rows.find((item) =\u003e item.json \u0026\u0026 item.json.id);\n  if (!session) {\n    return [{ json: { ok: false, cashOpen: false, error: \u0027CASH_REGISTER_CLOSED\u0027, message: \u0027La caja no esta abierta\u0027 } }];\n  }\n  return [{ json: { ...sale, cashOpen: true } }];\n} catch (error) {\n  return [{ json: { ok: false, cashOpen: false, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027 } }];\n}"
+                                     },
+                      "id":  "validar-caja-abierta",
+                      "name":  "ValidarCajaAbierta",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1820,
+                                       -260
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.cashOpen === true}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "caja-abierta",
+                      "name":  "CajaAbierta",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2080,
+                                       -260
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "search",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "tblyBp7gm4Lheqr7s",
+                                                       "mode":  "id"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "filterByFormula":  "={{$json.productFormula}}"
+                                     },
+                      "id":  "buscar-productos",
+                      "name":  "BuscarProductos",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       2340,
+                                       -360
+                                   ],
+                      "continueOnFail":  true,
+                      "alwaysOutputData":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const sale = $items(\u0027ValidarCajaAbierta\u0027)[0]?.json || {};\n  const records = $items(\u0027BuscarProductos\u0027).filter((item) =\u003e item.json \u0026\u0026 item.json.id \u0026\u0026 !item.json.error);\n  const queryError = $items(\u0027BuscarProductos\u0027).find((item) =\u003e item.json \u0026\u0026 (item.json.error || item.json.message) \u0026\u0026 !item.json.id);\n  if (queryError) {\n    return [{ json: { ok: false, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027 } }];\n  }\n\n  const byId = new Map(records.map((item) =\u003e [item.json.id, item.json.fields || item.json]));\n  const number = (value, fallback = 0) =\u003e {\n    const parsed = Number(value);\n    return Number.isFinite(parsed) ? parsed : fallback;\n  };\n  const money = (value) =\u003e Math.round(Number(value || 0) * 100) / 100;\n  const textValue = (value) =\u003e value \u0026\u0026 typeof value === \u0027object\u0027 \u0026\u0026 \u0027text\u0027 in value ? String(value.text || \u0027\u0027) : String(value || \u0027\u0027);\n\n  const serverItems = [];\n  const detailRows = [];\n  const stockRows = [];\n  const stockUpdates = [];\n\n  for (const item of sale.items) {\n    const record = byId.get(item.productId);\n    if (!record) {\n      return [{ json: { ok: false, error: \u0027PRODUCT_NOT_FOUND\u0027, message: \u0027Uno de los productos no existe\u0027, productId: item.productId } }];\n    }\n\n    const stockBefore = number(record[\u0027Stock Actual\u0027]);\n    const unitPrice = number(record.Importe, number(record[\u0027Precio x Kg\u0027]));\n    const quantity = number(item.quantity);\n\n    if (stockBefore \u003c quantity) {\n      return [{ json: { ok: false, error: \u0027INSUFFICIENT_STOCK\u0027, message: \u0027Stock insuficiente para completar la venta\u0027, productId: item.productId, available: stockBefore, requested: quantity } }];\n    }\n\n    if (!Number.isFinite(unitPrice) || unitPrice \u003c= 0) {\n      return [{ json: { ok: false, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027, productId: item.productId } }];\n    }\n\n    const stockAfter = stockBefore - quantity;\n    const productName = String(record.Name || \u0027Producto\u0027);\n    const barcode = textValue(record[\u0027Codigo de Barras\u0027]);\n    const lineTotal = money(unitPrice * quantity);\n\n    serverItems.push({ productId: item.productId, name: productName, barcode, quantity, unitPrice, lineTotal });\n    detailRows.push({ Venta: null, Producto: [item.productId], ProductoNombre: productName, CodigoBarras: barcode, Cantidad: quantity, PrecioUnitario: unitPrice, TotalLinea: lineTotal, Estado: \u0027ACTIVO\u0027 });\n    stockRows.push({ OperationId: sale.operationId, Producto: [item.productId], Tipo: \u0027VENTA\u0027, Cantidad: -quantity, StockAntes: stockBefore, StockDespues: stockAfter, Origen: \u0027VENTA\u0027, Venta: null, Responsable: sale.cashier, Estado: \u0027ACTIVO\u0027 });\n    stockUpdates.push({ id: item.productId, stockBefore, stockAfter });\n  }\n\n  const subtotal = money(serverItems.reduce((sum, item) =\u003e sum + item.lineTotal, 0));\n  const discountAmount = money(subtotal * (sale.discountPercent / 100));\n  const total = money(subtotal - discountAmount);\n  const change = sale.paymentMethod === \u0027cash\u0027 || sale.paymentMethod === \u0027efectivo\u0027 ? money(Math.max(0, sale.cashReceived - total)) : 0;\n\n  if ((sale.paymentMethod === \u0027cash\u0027 || sale.paymentMethod === \u0027efectivo\u0027) \u0026\u0026 sale.cashReceived \u003c total) {\n    return [{ json: { ok: false, error: \u0027INVALID_PAYLOAD\u0027, message: \u0027Faltan datos obligatorios para registrar la venta\u0027 } }];\n  }\n\n  return [{ json: { ...sale, items: serverItems, subtotal, discountAmount, total, change, detailRows, stockRows, stockUpdates } }];\n} catch (error) {\n  return [{ json: { ok: false, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027 } }];\n}"
+                                     },
+                      "id":  "validar-productos-precios",
+                      "name":  "ValidarProductosPrecios",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       2600,
+                                       -360
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.ok === true}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "venta-valida",
+                      "name":  "VentaValida",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2860,
+                                       -360
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $json;\nreturn [{ json: {\n  OperationId: sale.operationId,\n  EmpresaId: sale.empresaId,\n  UsuarioId: sale.cashier,\n  Cajero: sale.cashier,\n  CajaSesionId: sale.cajaSesionId,\n  ClienteNombre: sale.customerName,\n  Fecha: sale.createdAt,\n  MetodoPago: sale.paymentMethod,\n  Subtotal: sale.subtotal,\n  DescuentoPorcentaje: sale.discountPercent,\n  Total: sale.total,\n  EfectivoRecibido: sale.cashReceived,\n  Vuelto: sale.change,\n  Estado: \u0027PENDIENTE\u0027\n} }];"
+                                     },
+                      "id":  "preparar-venta-pendiente",
+                      "name":  "PrepararVentaPendiente",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       3120,
+                                       -460
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "create",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "tbleU4MHRm3Z2iRcY",
+                                                       "mode":  "id"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "columns":  {
+                                                         "mappingMode":  "autoMapInputData",
+                                                         "value":  {
+
+                                                                   }
+                                                     }
+                                     },
+                      "id":  "crear-venta-pendiente",
+                      "name":  "CrearVentaPendiente",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       3380,
+                                       -460
+                                   ],
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $items(\u0027ValidarProductosPrecios\u0027)[0]?.json || {};\nif (!$json || $json.error || !$json.id) {\n  return [{ json: { ok: false, canContinue: false, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027, operationId: sale.operationId } }];\n}\nreturn [{ json: { ...sale, canContinue: true, ventaId: $json.id } }];"
+                                     },
+                      "id":  "verificar-venta-creada",
+                      "name":  "VerificarVentaCreada",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       3640,
+                                       -460
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.canContinue === true}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "venta-creada",
+                      "name":  "VentaCreada",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       3900,
+                                       -460
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $items(\u0027VerificarVentaCreada\u0027)[0]?.json || {};\nreturn (sale.detailRows || []).map((row) =\u003e ({ json: { ...row, Venta: [sale.ventaId] } }));"
+                                     },
+                      "id":  "preparar-detalle",
+                      "name":  "PrepararDetalle",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       4160,
+                                       -560
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "create",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "DETALLE_VENTA",
+                                                       "mode":  "name"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "columns":  {
+                                                         "mappingMode":  "autoMapInputData",
+                                                         "value":  {
+
+                                                                   }
+                                                     }
+                                     },
+                      "id":  "crear-detalle-venta",
+                      "name":  "CrearDetalleVenta",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       4420,
+                                       -560
+                                   ],
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $items(\u0027VerificarVentaCreada\u0027)[0]?.json || {};\nconst created = $items(\u0027CrearDetalleVenta\u0027).filter((item) =\u003e item.json \u0026\u0026 item.json.id \u0026\u0026 !item.json.error);\nif (created.length !== (sale.detailRows || []).length) {\n  return [{ json: { ok: false, canContinue: false, failedStep: \u0027DETALLE_VENTA\u0027, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027, operationId: sale.operationId, ventaId: sale.ventaId, created: { detalleIds: created.map((item) =\u003e item.json.id) }, stockUpdates: [] } }];\n}\nreturn [{ json: { ...sale, canContinue: true, detalleIds: created.map((item) =\u003e item.json.id) } }];"
+                                     },
+                      "id":  "verificar-detalle",
+                      "name":  "VerificarDetalle",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       4680,
+                                       -560
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.canContinue === true}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "detalle-ok",
+                      "name":  "DetalleOK",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       4940,
+                                       -560
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $items(\u0027VerificarDetalle\u0027)[0]?.json || {};\nreturn (sale.stockRows || []).map((row, index) =\u003e ({ json: { ...row, Venta: [sale.ventaId], DetalleVenta: sale.detalleIds \u0026\u0026 sale.detalleIds[index] ? [sale.detalleIds[index]] : undefined } }));"
+                                     },
+                      "id":  "preparar-movimientos-stock",
+                      "name":  "PrepararMovimientosStock",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       5200,
+                                       -660
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "create",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "MOVIMIENTOS_STOCK",
+                                                       "mode":  "name"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "columns":  {
+                                                         "mappingMode":  "autoMapInputData",
+                                                         "value":  {
+
+                                                                   }
+                                                     }
+                                     },
+                      "id":  "crear-movimientos-stock",
+                      "name":  "CrearMovimientosStock",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       5460,
+                                       -660
+                                   ],
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $items(\u0027VerificarDetalle\u0027)[0]?.json || {};\nconst created = $items(\u0027CrearMovimientosStock\u0027).filter((item) =\u003e item.json \u0026\u0026 item.json.id \u0026\u0026 !item.json.error);\nif (created.length !== (sale.stockRows || []).length) {\n  return [{ json: { ok: false, canContinue: false, failedStep: \u0027MOVIMIENTOS_STOCK\u0027, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027, operationId: sale.operationId, ventaId: sale.ventaId, created: { detalleIds: sale.detalleIds || [], stockMovimientoIds: created.map((item) =\u003e item.json.id) }, stockUpdates: [] } }];\n}\nreturn [{ json: { ...sale, canContinue: true, stockMovimientoIds: created.map((item) =\u003e item.json.id) } }];"
+                                     },
+                      "id":  "verificar-movimientos-stock",
+                      "name":  "VerificarMovimientosStock",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       5720,
+                                       -660
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.canContinue === true}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "mov-stock-ok",
+                      "name":  "MovimientosStockOK",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       5980,
+                                       -660
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $items(\u0027VerificarMovimientosStock\u0027)[0]?.json || {};\nreturn (sale.stockUpdates || []).map((update) =\u003e ({ json: { id: update.id, \u0027Stock Actual\u0027: update.stockAfter, stockBefore: update.stockBefore, stockAfter: update.stockAfter } }));"
+                                     },
+                      "id":  "preparar-stock-updates",
+                      "name":  "PrepararStockUpdates",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       6240,
+                                       -760
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "update",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "tblyBp7gm4Lheqr7s",
+                                                       "mode":  "id"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "columns":  {
+                                                         "mappingMode":  "defineBelow",
+                                                         "value":  {
+                                                                       "id":  "={{$json.id}}",
+                                                                       "Stock Actual":  "={{[\u0027Stock Actual\u0027]}}"
+                                                                   }
+                                                     }
+                                     },
+                      "id":  "actualizar-stock-produccion",
+                      "name":  "ActualizarStockProduccion",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       6500,
+                                       -760
+                                   ],
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $items(\u0027VerificarMovimientosStock\u0027)[0]?.json || {};\nconst updated = $items(\u0027ActualizarStockProduccion\u0027).filter((item) =\u003e item.json \u0026\u0026 item.json.id \u0026\u0026 !item.json.error);\nif (updated.length !== (sale.stockUpdates || []).length) {\n  return [{ json: { ok: false, canContinue: false, failedStep: \u0027PRODUCCION_STOCK\u0027, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027, operationId: sale.operationId, ventaId: sale.ventaId, stockUpdates: sale.stockUpdates || [] } }];\n}\nreturn [{ json: { ...sale, canContinue: true } }];"
+                                     },
+                      "id":  "verificar-stock-actualizado",
+                      "name":  "VerificarStockActualizado",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       6760,
+                                       -760
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.canContinue === true}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "stock-ok",
+                      "name":  "StockOK",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       7020,
+                                       -760
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $items(\u0027VerificarStockActualizado\u0027)[0]?.json || {};\nreturn [{ json: {\n  venta_id: sale.ventaId,\n  caja_sesion_id: sale.cajaSesionId,\n  usuario_id: sale.cashier,\n  tipo: \u0027INGRESO\u0027,\n  origen: \u0027VENTA\u0027,\n  importe: sale.total,\n  estado: \u0027ACTIVO\u0027,\n  motivo: \u0027Venta POS\u0027,\n  operation_id: sale.operationId,\n  fecha_hora: sale.createdAt\n} }];"
+                                     },
+                      "id":  "preparar-movimiento-caja",
+                      "name":  "PrepararMovimientoCaja",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       7280,
+                                       -860
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "create",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "MOVIMIENTOS_CAJA",
+                                                       "mode":  "name"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "columns":  {
+                                                         "mappingMode":  "autoMapInputData",
+                                                         "value":  {
+
+                                                                   }
+                                                     }
+                                     },
+                      "id":  "crear-movimiento-caja",
+                      "name":  "CrearMovimientoCaja",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       7540,
+                                       -860
+                                   ],
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $items(\u0027VerificarStockActualizado\u0027)[0]?.json || {};\nif (!$json || $json.error || !$json.id) {\n  return [{ json: { ok: false, canContinue: false, failedStep: \u0027MOVIMIENTOS_CAJA\u0027, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027, operationId: sale.operationId, ventaId: sale.ventaId, stockUpdates: sale.stockUpdates || [] } }];\n}\nreturn [{ json: { ...sale, canContinue: true, cajaMovimientoId: $json.id } }];"
+                                     },
+                      "id":  "verificar-movimiento-caja",
+                      "name":  "VerificarMovimientoCaja",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       7800,
+                                       -860
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.canContinue === true}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "mov-caja-ok",
+                      "name":  "MovimientoCajaOK",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       8060,
+                                       -860
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $items(\u0027VerificarMovimientoCaja\u0027)[0]?.json || {};\nreturn [{ json: { id: sale.ventaId, Estado: \u0027CONFIRMADA\u0027 } }];"
+                                     },
+                      "id":  "preparar-confirmacion",
+                      "name":  "PrepararConfirmacion",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       8320,
+                                       -960
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "update",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "tbleU4MHRm3Z2iRcY",
+                                                       "mode":  "id"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "columns":  {
+                                                         "mappingMode":  "defineBelow",
+                                                         "value":  {
+                                                                       "id":  "={{$json.id}}",
+                                                                       "Estado":  "CONFIRMADA"
+                                                                   }
+                                                     }
+                                     },
+                      "id":  "confirmar-venta",
+                      "name":  "ConfirmarVenta",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       8580,
+                                       -960
+                                   ],
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const sale = $items(\u0027VerificarMovimientoCaja\u0027)[0]?.json || {};\nif (!$json || $json.error || !$json.id) {\n  return [{ json: { ok: false, canContinue: false, failedStep: \u0027CONFIRMAR_VENTA\u0027, error: \u0027SALE_PROCESSING_ERROR\u0027, message: \u0027No se pudo completar la venta\u0027, operationId: sale.operationId, ventaId: sale.ventaId, cajaMovimientoId: sale.cajaMovimientoId, stockUpdates: sale.stockUpdates || [] } }];\n}\nreturn [{ json: { ok: true, ventaId: sale.ventaId, operationId: sale.operationId, total: sale.total, subtotal: sale.subtotal, discountAmount: sale.discountAmount, change: sale.change, idempotent: false } }];"
+                                     },
+                      "id":  "preparar-respuesta-final",
+                      "name":  "PrepararRespuestaFinal",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       8840,
+                                       -960
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.ok === true}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "confirmacion-ok",
+                      "name":  "ConfirmacionOK",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       9100,
+                                       -960
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const failed = $json || {};\nreturn [{ json: {\n  ok: false,\n  operationId: failed.operationId || null,\n  ventaId: failed.ventaId || null,\n  cajaMovimientoId: failed.cajaMovimientoId || null,\n  stockUpdates: Array.isArray(failed.stockUpdates) ? failed.stockUpdates : [],\n  failedStep: failed.failedStep || \u0027UNKNOWN\u0027,\n  error: failed.error || \u0027SALE_PROCESSING_ERROR\u0027,\n  message: failed.message || \u0027No se pudo completar la venta\u0027\n} }];"
+                                     },
+                      "id":  "preparar-rollback",
+                      "name":  "PrepararRollback",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       4160,
+                                       -80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const rollback = $items(\u0027PrepararRollback\u0027)[0]?.json || {};\nif (!Array.isArray(rollback.stockUpdates) || rollback.stockUpdates.length === 0) {\n  return [{ json: { ...rollback, skipStockRestore: true } }];\n}\nreturn rollback.stockUpdates.map((update) =\u003e ({ json: { id: update.id, \u0027Stock Actual\u0027: update.stockBefore } }));"
+                                     },
+                      "id":  "preparar-restaurar-stock",
+                      "name":  "PrepararRestaurarStock",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       4420,
+                                       -80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{!$json.skipStockRestore}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "restaurar-stock",
+                      "name":  "RestaurarStock",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       4680,
+                                       -80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "update",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "tblyBp7gm4Lheqr7s",
+                                                       "mode":  "id"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "columns":  {
+                                                         "mappingMode":  "defineBelow",
+                                                         "value":  {
+                                                                       "id":  "={{$json.id}}",
+                                                                       "Stock Actual":  "={{[\u0027Stock Actual\u0027]}}"
+                                                                   }
+                                                     }
+                                     },
+                      "id":  "restaurar-stock-produccion",
+                      "name":  "RestaurarStockProduccion",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       4940,
+                                       -180
+                                   ],
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const rollback = $items(\u0027PrepararRollback\u0027)[0]?.json || {};\nif (!rollback.cajaMovimientoId) {\n  return [{ json: { ...rollback, skipCajaCancel: true } }];\n}\nreturn [{ json: { id: rollback.cajaMovimientoId, estado: \u0027ANULADO\u0027, motivo: `Anulado automaticamente por rollback de venta ${rollback.operationId || \u0027\u0027}` } }];"
+                                     },
+                      "id":  "preparar-anular-caja",
+                      "name":  "PrepararAnularCaja",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       5200,
+                                       -80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{!$json.skipCajaCancel}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "anular-caja",
+                      "name":  "AnularCaja",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       5460,
+                                       -80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "update",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "MOVIMIENTOS_CAJA",
+                                                       "mode":  "name"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "columns":  {
+                                                         "mappingMode":  "defineBelow",
+                                                         "value":  {
+                                                                       "id":  "={{$json.id}}",
+                                                                       "estado":  "ANULADO",
+                                                                       "motivo":  "={{$json.motivo}}"
+                                                                   }
+                                                     }
+                                     },
+                      "id":  "anular-movimiento-caja",
+                      "name":  "AnularMovimientoCaja",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       5720,
+                                       -180
+                                   ],
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const rollback = $items(\u0027PrepararRollback\u0027)[0]?.json || {};\nif (!rollback.ventaId) {\n  return [{ json: { ...rollback, skipVentaMark: true } }];\n}\nreturn [{ json: { id: rollback.ventaId, Estado: \u0027ROLLBACK_PENDIENTE\u0027 } }];"
+                                     },
+                      "id":  "preparar-marcar-venta-rollback",
+                      "name":  "PrepararMarcarVentaRollback",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       5980,
+                                       -80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{!$json.skipVentaMark}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "marcar-venta-rollback",
+                      "name":  "MarcarVentaRollback",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       6240,
+                                       -80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "update",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "tbleU4MHRm3Z2iRcY",
+                                                       "mode":  "id"
+                                                   },
+                                         "options":  {
+
+                                                     },
+                                         "columns":  {
+                                                         "mappingMode":  "defineBelow",
+                                                         "value":  {
+                                                                       "id":  "={{$json.id}}",
+                                                                       "Estado":  "ROLLBACK_PENDIENTE"
+                                                                   }
+                                                     }
+                                     },
+                      "id":  "marcar-venta-rollback-airtable",
+                      "name":  "MarcarVentaRollbackAirtable",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       6500,
+                                       -180
+                                   ],
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const rollback = $items(\u0027PrepararRollback\u0027)[0]?.json || {};\nreturn [{ json: { ok: false, error: rollback.error || \u0027SALE_PROCESSING_ERROR\u0027, message: rollback.message || \u0027No se pudo completar la venta\u0027, operationId: rollback.operationId || null, ventaId: rollback.ventaId || null, failedStep: rollback.failedStep || \u0027UNKNOWN\u0027 } }];"
+                                     },
+                      "id":  "preparar-respuesta-rollback",
+                      "name":  "PrepararRespuestaRollback",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       6760,
+                                       -80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{$json}}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Methods",
+                                                                                                     "value":  "GET,POST,OPTIONS"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Headers",
+                                                                                                     "value":  "Content-Type, Authorization"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     },
+                      "id":  "respond-success",
+                      "name":  "RespondSuccess",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       9360,
+                                       -960
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{$json}}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Methods",
+                                                                                                     "value":  "GET,POST,OPTIONS"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Headers",
+                                                                                                     "value":  "Content-Type, Authorization"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     },
+                      "id":  "respond-error",
+                      "name":  "RespondError",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       3120,
+                                       80
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{$json}}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Methods",
+                                                                                                     "value":  "GET,POST,OPTIONS"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Headers",
+                                                                                                     "value":  "Content-Type, Authorization"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     },
+                      "id":  "respond-idempotencia",
+                      "name":  "RespondIdempotencia",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       1560,
+                                       40
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{$json}}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Methods",
+                                                                                                     "value":  "GET,POST,OPTIONS"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Headers",
+                                                                                                     "value":  "Content-Type, Authorization"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     },
+                      "id":  "respond-rollback",
+                      "name":  "RespondRollback",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       7020,
+                                       -80
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "Webhook":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "Validacion",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "Validacion":  {
+                                           "main":  [
+                                                        [
+                                                            {
+                                                                "node":  "PayloadValido",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ]
+                                                    ]
+                                       },
+                        "PayloadValido":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "BuscarVentaOperationId",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ],
+                                                           [
+                                                               {
+                                                                   "node":  "RespondError",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "BuscarVentaOperationId":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "DecidirIdempotencia",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "DecidirIdempotencia":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "PuedeProcesar",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "PuedeProcesar":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "BuscarCajaAbierta",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ],
+                                                           [
+                                                               {
+                                                                   "node":  "RespondIdempotencia",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "BuscarCajaAbierta":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "ValidarCajaAbierta",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "ValidarCajaAbierta":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "CajaAbierta",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "CajaAbierta":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "BuscarProductos",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ],
+                                                         [
+                                                             {
+                                                                 "node":  "RespondError",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        },
+                        "BuscarProductos":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "ValidarProductosPrecios",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "ValidarProductosPrecios":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "VentaValida",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "VentaValida":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "PrepararVentaPendiente",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ],
+                                                         [
+                                                             {
+                                                                 "node":  "RespondError",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        },
+                        "PrepararVentaPendiente":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "CrearVentaPendiente",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "CrearVentaPendiente":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "VerificarVentaCreada",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "VerificarVentaCreada":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "VentaCreada",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "VentaCreada":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "PrepararDetalle",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ],
+                                                         [
+                                                             {
+                                                                 "node":  "RespondError",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        },
+                        "PrepararDetalle":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "CrearDetalleVenta",
+                                                                     "type":  "main",
+                                                                     "index":  0
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "CrearDetalleVenta":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "VerificarDetalle",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "VerificarDetalle":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "DetalleOK",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "DetalleOK":  {
+                                          "main":  [
+                                                       [
+                                                           {
+                                                               "node":  "PrepararMovimientosStock",
+                                                               "type":  "main",
+                                                               "index":  0
+                                                           }
+                                                       ],
+                                                       [
+                                                           {
+                                                               "node":  "PrepararRollback",
+                                                               "type":  "main",
+                                                               "index":  0
+                                                           }
+                                                       ]
+                                                   ]
+                                      },
+                        "PrepararMovimientosStock":  {
+                                                         "main":  [
+                                                                      [
+                                                                          {
+                                                                              "node":  "CrearMovimientosStock",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ]
+                                                                  ]
+                                                     },
+                        "CrearMovimientosStock":  {
+                                                      "main":  [
+                                                                   [
+                                                                       {
+                                                                           "node":  "VerificarMovimientosStock",
+                                                                           "type":  "main",
+                                                                           "index":  0
+                                                                       }
+                                                                   ]
+                                                               ]
+                                                  },
+                        "VerificarMovimientosStock":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "MovimientosStockOK",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "MovimientosStockOK":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "PrepararStockUpdates",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ],
+                                                                [
+                                                                    {
+                                                                        "node":  "PrepararRollback",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "PrepararStockUpdates":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "ActualizarStockProduccion",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "ActualizarStockProduccion":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "VerificarStockActualizado",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "VerificarStockActualizado":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "StockOK",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      },
+                        "StockOK":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "PrepararMovimientoCaja",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ],
+                                                     [
+                                                         {
+                                                             "node":  "PrepararRollback",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "PrepararMovimientoCaja":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "CrearMovimientoCaja",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "CrearMovimientoCaja":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "VerificarMovimientoCaja",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "VerificarMovimientoCaja":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "MovimientoCajaOK",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "MovimientoCajaOK":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "PrepararConfirmacion",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ],
+                                                              [
+                                                                  {
+                                                                      "node":  "PrepararRollback",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "PrepararConfirmacion":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "ConfirmarVenta",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "ConfirmarVenta":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "PrepararRespuestaFinal",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "PrepararRespuestaFinal":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "ConfirmacionOK",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "ConfirmacionOK":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "RespondSuccess",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ],
+                                                            [
+                                                                {
+                                                                    "node":  "PrepararRollback",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "PrepararRollback":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "PrepararRestaurarStock",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "PrepararRestaurarStock":  {
+                                                       "main":  [
+                                                                    [
+                                                                        {
+                                                                            "node":  "RestaurarStock",
+                                                                            "type":  "main",
+                                                                            "index":  0
+                                                                        }
+                                                                    ]
+                                                                ]
+                                                   },
+                        "RestaurarStock":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "RestaurarStockProduccion",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ],
+                                                            [
+                                                                {
+                                                                    "node":  "PrepararAnularCaja",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "RestaurarStockProduccion":  {
+                                                         "main":  [
+                                                                      [
+                                                                          {
+                                                                              "node":  "PrepararAnularCaja",
+                                                                              "type":  "main",
+                                                                              "index":  0
+                                                                          }
+                                                                      ]
+                                                                  ]
+                                                     },
+                        "PrepararAnularCaja":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "AnularCaja",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "AnularCaja":  {
+                                           "main":  [
+                                                        [
+                                                            {
+                                                                "node":  "AnularMovimientoCaja",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ],
+                                                        [
+                                                            {
+                                                                "node":  "PrepararMarcarVentaRollback",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ]
+                                                    ]
+                                       },
+                        "AnularMovimientoCaja":  {
+                                                     "main":  [
+                                                                  [
+                                                                      {
+                                                                          "node":  "PrepararMarcarVentaRollback",
+                                                                          "type":  "main",
+                                                                          "index":  0
+                                                                      }
+                                                                  ]
+                                                              ]
+                                                 },
+                        "PrepararMarcarVentaRollback":  {
+                                                            "main":  [
+                                                                         [
+                                                                             {
+                                                                                 "node":  "MarcarVentaRollback",
+                                                                                 "type":  "main",
+                                                                                 "index":  0
+                                                                             }
+                                                                         ]
+                                                                     ]
+                                                        },
+                        "MarcarVentaRollback":  {
+                                                    "main":  [
+                                                                 [
+                                                                     {
+                                                                         "node":  "MarcarVentaRollbackAirtable",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ],
+                                                                 [
+                                                                     {
+                                                                         "node":  "PrepararRespuestaRollback",
+                                                                         "type":  "main",
+                                                                         "index":  0
+                                                                     }
+                                                                 ]
+                                                             ]
+                                                },
+                        "MarcarVentaRollbackAirtable":  {
+                                                            "main":  [
+                                                                         [
+                                                                             {
+                                                                                 "node":  "PrepararRespuestaRollback",
+                                                                                 "type":  "main",
+                                                                                 "index":  0
+                                                                             }
+                                                                         ]
+                                                                     ]
+                                                        },
+                        "PrepararRespuestaRollback":  {
+                                                          "main":  [
+                                                                       [
+                                                                           {
+                                                                               "node":  "RespondRollback",
+                                                                               "type":  "main",
+                                                                               "index":  0
+                                                                           }
+                                                                       ]
+                                                                   ]
+                                                      }
+                    },
+    "pinData":  {
+
+                },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "active":  false,
+    "versionId":  "caseritas-venta-iac-v1"
+}

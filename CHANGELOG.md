@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-08-04 - Sale transaction workflow
+
+### Added
+
+- `n8n-workflows/workflow_venta.json` ready for n8n Cloud Import from URL.
+- `POST /venta` workflow with payload validation, idempotency by `OperationId`, open cash-session validation, product and stock validation, backend price recalculation, sale detail, stock ledger, stock update, cash ledger, sale confirmation and controlled compensation path.
+
+### Status
+
+- `/venta`: LISTO PARA IMPORTAR.
+- Uses confirmed Airtable IDs for `VENTAS` and `PRODUCCION`.
+- Uses table names for `SESIONES_CAJA`, `DETALLE_VENTA`, `MOVIMIENTOS_STOCK` and `MOVIMIENTOS_CAJA` because their real Table IDs remain pending confirmation.
+- Not certified in production because n8n execution availability remains the active infrastructure blocker.
+
+
 ## 2026-08-04 - Cash opening workflow
 
 ### Added

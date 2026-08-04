@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-08-04 - Airtable schema audit
+
+### Added
+
+- `docs/AIRTABLE_SCHEMA_AUDIT.md` with the required Airtable schema matrix for Caseritas POS v1.0.
+- `docs/AIRTABLE_RELEASE_CHECKLIST.md` with the manual checklist to collect Table IDs, field names, field types, select options and linked-record targets.
+
+### Status
+
+- Airtable schema audit: LISTO PARA REVISION.
+- Confirmed Table IDs: `PRODUCCION` and `VENTAS`.
+- Pending Table IDs: `SESIONES_CAJA`, `DETALLE_VENTA`, `MOVIMIENTOS_STOCK`, `MOVIMIENTOS_CAJA`.
+- Schema is not certified until Guillermo provides real Airtable evidence.
+
+
 ## 2026-08-04 - Cash closing workflow
 
 ### Added

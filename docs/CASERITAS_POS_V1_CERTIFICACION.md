@@ -6,6 +6,7 @@
 |------|--------|-----------|---------|--------------|
 | Auditoria y documentacion | CERTIFICADO | Commit `8f36c23` | Ninguno | Importar `/productos` |
 | GitHub como fuente de verdad | CERTIFICADO | `main` actualizado; URL raw HTTP 200 | Ninguno | Mantener workflows IaC |
+| Auditoria esquema Airtable | LISTO PARA REVISION | `AIRTABLE_SCHEMA_AUDIT.md` y `AIRTABLE_RELEASE_CHECKLIST.md` creados | Table IDs y tipos reales pendientes para tablas transaccionales | Guillermo debe relevar Airtable real |
 | Workflow `/productos` publicado | IMPORTADO | `workflow_productos.json` publicado e importado en n8n Cloud | Ninguno | Validar ejecucion productiva |
 | `/productos` en produccion | BLOQUEADO | Workflow importado; ejecuciones fallan con `Execution limit reached. Consider upgrading your plan.` | BLOQUEADO POR INFRAESTRUCTURA: limite del plan n8n | Validar/restablecer ejecuciones disponibles en n8n |
 | `/producto` | LISTO PARA IMPORTAR | `workflow_producto.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva | Importar cuando n8n tenga ejecuciones disponibles |
@@ -19,6 +20,15 @@
 | Release v1.0 | PENDIENTE | Sin evidencia | Primera venta | Crear release |
 
 
+
+## Evidencia actual del hito Airtable schema audit
+
+- Estado: LISTO PARA REVISION.
+- Archivos: `docs/AIRTABLE_SCHEMA_AUDIT.md` y `docs/AIRTABLE_RELEASE_CHECKLIST.md`.
+- Alcance: auditoria documental del esquema requerido para apertura, venta, detalle, stock, movimientos de caja y cierre.
+- Tablas con ID confirmado: `PRODUCCION` (`tblyBp7gm4Lheqr7s`) y `VENTAS` (`tbleU4MHRm3Z2iRcY`).
+- Tablas pendientes: `SESIONES_CAJA`, `DETALLE_VENTA`, `MOVIMIENTOS_STOCK`, `MOVIMIENTOS_CAJA`.
+- Estado productivo: no certificado; requiere evidencia real de Airtable antes de ejecutar workflows productivos.
 ## Evidencia actual del hito Modo Demo
 
 - Estado: CERTIFICADO MANUALMENTE.

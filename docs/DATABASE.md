@@ -18,6 +18,16 @@ CLIENTES    tblLjKNdmUB4OsTU1
 ```
 
 Future tables should be created with stable IDs and documented here.
+## Airtable Schema Release Audit
+
+Current schema audit documents:
+
+```txt
+docs/AIRTABLE_SCHEMA_AUDIT.md
+docs/AIRTABLE_RELEASE_CHECKLIST.md
+```
+
+Release rule: do not mark the Airtable schema as certified until Table IDs, field names, field types, select options and linked-record targets are confirmed from Airtable real.
 
 ## PRODUCCION
 
@@ -93,7 +103,7 @@ Notes:
 
 ## DETALLE_VENTA
 
-DETALLE_VENTA Table ID real: PENDIENTE DE CONFIRMACION EN AIRTABLE. Los workflows IaC usan el nombre DETALLE_VENTA hasta que el ID quede confirmado.
+DETALLE_VENTA Table ID real: PENDIENTE DE CONFIRMACION EN AIRTABLE. Los workflows IaC usan el nombre `DETALLE_VENTA` hasta que el ID quede confirmado.
 
 Status: required for Sprint 1 sale engine. Table ID pending after Airtable creation.
 
@@ -197,7 +207,7 @@ operation_id_cierre
 
 ## MOVIMIENTOS_CAJA
 
-MOVIMIENTOS_CAJA Table ID real: PENDIENTE DE CONFIRMACION EN AIRTABLE. Los workflows IaC usan el nombre MOVIMIENTOS_CAJA hasta que el ID quede confirmado.
+MOVIMIENTOS_CAJA Table ID real: PENDIENTE DE CONFIRMACION EN AIRTABLE. Los workflows IaC usan el nombre `MOVIMIENTOS_CAJA` hasta que el ID quede confirmado.
 
 Status: required for Caja Real. Table ID pending after Airtable creation.
 
@@ -254,7 +264,7 @@ Notes:
 
 ## MOVIMIENTOS_STOCK
 
-MOVIMIENTOS_STOCK Table ID real: PENDIENTE DE CONFIRMACION EN AIRTABLE. Los workflows IaC usan el nombre MOVIMIENTOS_STOCK hasta que el ID quede confirmado.
+MOVIMIENTOS_STOCK Table ID real: PENDIENTE DE CONFIRMACION EN AIRTABLE. Los workflows IaC usan el nombre `MOVIMIENTOS_STOCK` hasta que el ID quede confirmado.
 
 Status: required for Sprint 1 sale engine. Table ID pending after Airtable creation.
 

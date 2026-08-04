@@ -1841,3 +1841,97 @@ body .spa-outlet {
 .app-header {
   display: none !important;
 }
+.demo-action {
+  border-color: rgba(31, 122, 82, 0.28);
+  color: #145c3d;
+  background: #f0faf4;
+}
+
+.demo-action:disabled {
+  opacity: 0.72;
+  cursor: progress;
+}
+
+.demo-running .catalog-panel,
+.demo-running .cart-panel,
+.demo-running .operation-bar {
+  transition: box-shadow 180ms ease, transform 180ms ease, border-color 180ms ease;
+}
+
+.demo-product-card {
+  animation: demoProductIn 260ms ease both;
+}
+
+.demo-cart-item {
+  animation: demoCartIn 240ms ease both;
+}
+
+.demo-ticket-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(13, 23, 17, 0.36);
+  backdrop-filter: blur(8px);
+  animation: demoFadeIn 180ms ease both;
+}
+
+.demo-ticket {
+  width: min(420px, 100%);
+  padding: 26px;
+  border-radius: var(--radius);
+  background: #fff;
+  color: #122217;
+  box-shadow: 0 28px 70px rgba(14, 26, 18, 0.28);
+  animation: demoTicketIn 240ms ease both;
+}
+
+.demo-ticket h2 {
+  margin: 0 0 18px;
+  font-size: 1.7rem;
+}
+
+.demo-ticket-lines {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.demo-ticket-lines div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(31, 122, 82, 0.12);
+}
+
+.demo-dashboard-line {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(31, 122, 82, 0.12);
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+@keyframes demoProductIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes demoCartIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes demoFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes demoTicketIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}

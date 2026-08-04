@@ -15,8 +15,16 @@
 | `/caja/cerrar` | PENDIENTE | Sin certificacion | Venta pendiente | Preparar despues |
 | Prueba integral | PENDIENTE | Sin evidencia | Endpoints | Ejecutar circuito |
 | Primera venta real | PENDIENTE | Sin evidencia | Prueba integral | Vender |
+| Modo Demo | CERTIFICADO | Guillermo confirmo que la secuencia completa funciona | Ninguno | Publicar en GitHub Pages |
 | Release v1.0 | PENDIENTE | Sin evidencia | Primera venta | Crear release |
 
+
+## Evidencia actual del hito Modo Demo
+
+- Estado: CERTIFICADO MANUALMENTE.
+- Evidencia: Guillermo confirmo que la secuencia completa funciona.
+- Alcance validado: inicia desde "Ver demostracion", simula busqueda, muestra productos locales, agrega productos, modifica cantidades, selecciona efectivo, cobra, muestra ticket, espera 5 segundos, reinicia y puede detenerse desde el boton.
+- Aislamiento: datos locales simulados; sin n8n, sin Airtable, sin contratos API y sin ejecucion automatica al abrir el POS.
 ## Estados validos
 
 - PENDIENTE

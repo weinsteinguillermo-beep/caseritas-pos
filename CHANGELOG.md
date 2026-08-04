@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-04 - POS demo mode
+
+### Added
+
+- Autonomous POS demo mode with local simulated data.
+- Demo button in the POS terminal header.
+- Simulated sale sequence: product search, cart additions, quantity change, cash payment, ticket display, dashboard status update, 5-second wait and restart.
+
+### Certified
+
+- Modo Demo: CERTIFICADO MANUALMENTE.
+- Evidence: Guillermo confirmed the complete sequence works.
+- Production isolation verified: no backend calls, no n8n calls, no Airtable writes, no API imports, no automatic execution on POS load.
+
 ## 2026-07-28 - n8n infrastructure block
 
 ### Changed

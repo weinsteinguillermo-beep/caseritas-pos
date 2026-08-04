@@ -21,6 +21,7 @@ window.CaseritasViews.POS = {
           </div>
           <div class="terminal-actions">
             <span class="status-pill" id="terminal-server-status" data-state="warning">Servidor pendiente</span>
+            <button class="ghost-button demo-action" id="demo-mode-button" type="button">Ver demostración</button>
             <button class="ghost-button" id="shift-sales-button" type="button">Ventas del turno</button>
             <button class="ghost-button danger-action" id="open-close-cash-button" type="button">Cerrar caja</button>
           </div>
@@ -126,6 +127,7 @@ window.CaseritasViews.POS = {
     const operationStatus = document.querySelector("#global-status-bar");
     const terminalContext = document.querySelector("#terminal-context");
     const terminalServer = document.querySelector("#terminal-server-status");
+    const demoButton = document.querySelector("#demo-mode-button");
     const closeCashButton = document.querySelector("#open-close-cash-button");
     const shiftSalesButton = document.querySelector("#shift-sales-button");
     const customerNameInput = document.querySelector("#customer-name");
@@ -454,6 +456,25 @@ window.CaseritasViews.POS = {
     countedInput.addEventListener("input", renderCloseTotals, options);
     closeModal.addEventListener("click", (event) => { if (event.target === closeModal) closeCloseModal(); }, options);
     shiftSalesButton.addEventListener("click", () => { ui.showMessage("Ventas del turno disponibles en Airtable durante el piloto.", "warning"); }, options);
+    if (window.CaseritasDemo && demoButton) {
+      demoButton.addEventListener("click", () => window.CaseritasDemo.run({
+        ui,
+        pos,
+        appState,
+        renderCart,
+        loadProducts,
+        renderOperationalState,
+        openPanel,
+        salePanel,
+        operationStatus,
+        terminalContext,
+        terminalServer,
+        closeCashButton,
+        shiftSalesButton,
+        customerNameInput,
+        demoButton,
+      }), options);
+    }
 
     const current = appState.snapshot();
     if (current.usuario) cashierInput.value = current.usuario.nombre;

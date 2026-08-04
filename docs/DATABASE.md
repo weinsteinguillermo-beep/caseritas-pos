@@ -247,6 +247,7 @@ ERROR
 
 Notes:
 
+- Workflow `/caja/cerrar` calcula `total_esperado` como `fondo_inicial + ingresos activos - egresos activos` desde `MOVIMIENTOS_CAJA`; no debe confiar en totales enviados por el frontend.
 - `SESIONES_CAJA` is the cash session.
 - `MOVIMIENTOS_CAJA` is the financial ledger.
 - The old `CAJA` table must not continue mixing sessions and movements for production.

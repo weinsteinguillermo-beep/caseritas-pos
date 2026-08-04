@@ -12,7 +12,7 @@
 | `/caja/estado` | LISTO PARA IMPORTAR | `workflow_caja_estado.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva | Importar cuando n8n tenga ejecuciones disponibles |
 | `/caja/abrir` | LISTO PARA IMPORTAR | `workflow_caja_abrir.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva; Table ID `SESIONES_CAJA` pendiente | Importar cuando n8n tenga ejecuciones disponibles |
 | `/venta` | LISTO PARA IMPORTAR | `workflow_venta.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva; Table IDs transaccionales pendientes | Importar cuando n8n tenga ejecuciones disponibles |
-| `/caja/cerrar` | PENDIENTE | Sin certificacion | Venta pendiente | Preparar despues |
+| `/caja/cerrar` | LISTO PARA IMPORTAR | `workflow_caja_cerrar.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva; Table IDs `SESIONES_CAJA` y `MOVIMIENTOS_CAJA` pendientes | Importar cuando n8n tenga ejecuciones disponibles |
 | Prueba integral | PENDIENTE | Sin evidencia | Endpoints | Ejecutar circuito |
 | Primera venta real | PENDIENTE | Sin evidencia | Prueba integral | Vender |
 | Modo Demo | CERTIFICADO | Guillermo confirmo que la secuencia completa funciona | Ninguno | Publicar en GitHub Pages |
@@ -27,6 +27,18 @@
 - Aislamiento: datos locales simulados; sin n8n, sin Airtable, sin contratos API y sin ejecucion automatica al abrir el POS.
 
 
+
+## Evidencia actual del hito `/caja/cerrar`
+
+- Estado: LISTO PARA IMPORTAR.
+- Archivo: `n8n-workflows/workflow_caja_cerrar.json`.
+- URL raw objetivo: `https://raw.githubusercontent.com/weinsteinguillermo-beep/caseritas-pos/main/n8n-workflows/workflow_caja_cerrar.json`.
+- Contrato: `POST /caja/cerrar` con `operationId`, `empresaId`, `usuarioId`, `cajaSesionId`, `totalContado`, `observaciones`, `fechaHora` y `cajaId` opcional por compatibilidad con el POS actual.
+- Tablas Airtable: `SESIONES_CAJA` y `MOVIMIENTOS_CAJA` por nombre, porque los Table IDs reales siguen pendientes en `docs/DATABASE.md`.
+- Campos usados en `SESIONES_CAJA`: `empresa_id`, `usuario_id`, `caja_id`, `estado`, `fondo_inicial`, `fecha_cierre`, `total_esperado`, `total_contado`, `diferencia`, `observaciones`, `operation_id_cierre`.
+- Campos usados en `MOVIMIENTOS_CAJA`: `caja_sesion_id`, `tipo`, `importe`, `estado`, `operation_id`, `fecha_hora`.
+- Reglas: valida payload, valida total contado, idempotencia por `operation_id_cierre`, valida sesion abierta, calcula total esperado desde movimientos activos, calcula diferencia y responde JSON con CORS en todas las ramas.
+- Estado productivo: no certificado; pendiente de importar y probar en n8n Cloud cuando existan ejecuciones disponibles.
 ## Evidencia actual del hito `/venta`
 
 - Estado: LISTO PARA IMPORTAR.

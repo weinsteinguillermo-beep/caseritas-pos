@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-08-04 - Cash closing workflow
+
+### Added
+
+- `n8n-workflows/workflow_caja_cerrar.json` ready for n8n Cloud Import from URL.
+- `POST /caja/cerrar` workflow with payload validation, counted-total validation, idempotency by `operation_id_cierre`, cash-session validation, backend expected-total calculation from active cash movements, difference calculation, CORS and JSON responses.
+
+### Status
+
+- `/caja/cerrar`: LISTO PARA IMPORTAR.
+- Uses table names for `SESIONES_CAJA` and `MOVIMIENTOS_CAJA` because their real Table IDs remain pending confirmation.
+- `cajaId` is accepted and validated when present, but not required because the current POS close payload does not send it.
+- Not certified in production because n8n execution availability remains the active infrastructure blocker.
+
+
 ## 2026-08-04 - Sale transaction workflow
 
 ### Added

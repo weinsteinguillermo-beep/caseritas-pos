@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-04 - Cash opening workflow
+
+### Added
+
+- `n8n-workflows/workflow_caja_abrir.json` ready for n8n Cloud Import from URL.
+- `POST /caja/abrir` workflow with payload validation, opening balance validation, idempotency by `operation_id_apertura`, open-session guard, clean Airtable create payload, CORS and JSON responses.
+
+### Status
+
+- `/caja/abrir`: LISTO PARA IMPORTAR.
+- Uses Airtable table name `SESIONES_CAJA` because the real Table ID remains pending confirmation.
+- Not certified in production because n8n execution availability remains the active infrastructure blocker.
+
 ## 2026-08-04 - Cash status workflow
 
 ### Added

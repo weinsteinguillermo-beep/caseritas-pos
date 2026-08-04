@@ -168,6 +168,8 @@ estado
 
 ## SESIONES_CAJA
 
+Table ID real: PENDIENTE DE CONFIRMACION EN AIRTABLE. Los workflows IaC usan el nombre `SESIONES_CAJA` hasta que el ID quede confirmado.
+
 Status: required for Caja Real. Table ID pending after Airtable creation.
 
 Purpose: stores opening and closing state for each cash session.

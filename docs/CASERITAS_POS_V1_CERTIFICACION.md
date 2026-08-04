@@ -10,7 +10,7 @@
 | `/productos` en produccion | BLOQUEADO | Workflow importado; ejecuciones fallan con `Execution limit reached. Consider upgrading your plan.` | BLOQUEADO POR INFRAESTRUCTURA: limite del plan n8n | Validar/restablecer ejecuciones disponibles en n8n |
 | `/producto` | LISTO PARA IMPORTAR | `workflow_producto.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva | Importar cuando n8n tenga ejecuciones disponibles |
 | `/caja/estado` | LISTO PARA IMPORTAR | `workflow_caja_estado.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva | Importar cuando n8n tenga ejecuciones disponibles |
-| `/caja/abrir` | PENDIENTE | Sin certificacion | Estado de caja | Preparar despues |
+| `/caja/abrir` | LISTO PARA IMPORTAR | `workflow_caja_abrir.json` preparado para Import from URL | Bloqueado por limite de ejecuciones n8n para certificacion productiva; Table ID `SESIONES_CAJA` pendiente | Importar cuando n8n tenga ejecuciones disponibles |
 | `/venta` | PENDIENTE | Body vacio | Endpoints previos | Preparar despues |
 | `/caja/cerrar` | PENDIENTE | Sin certificacion | Venta pendiente | Preparar despues |
 | Prueba integral | PENDIENTE | Sin evidencia | Endpoints | Ejecutar circuito |
@@ -25,6 +25,17 @@
 - Evidencia: Guillermo confirmo que la secuencia completa funciona.
 - Alcance validado: inicia desde "Ver demostracion", simula busqueda, muestra productos locales, agrega productos, modifica cantidades, selecciona efectivo, cobra, muestra ticket, espera 5 segundos, reinicia y puede detenerse desde el boton.
 - Aislamiento: datos locales simulados; sin n8n, sin Airtable, sin contratos API y sin ejecucion automatica al abrir el POS.
+
+## Evidencia actual del hito `/caja/abrir`
+
+- Estado: LISTO PARA IMPORTAR.
+- Archivo: `n8n-workflows/workflow_caja_abrir.json`.
+- URL raw objetivo: `https://raw.githubusercontent.com/weinsteinguillermo-beep/caseritas-pos/main/n8n-workflows/workflow_caja_abrir.json`.
+- Contrato: `POST /caja/abrir` con `operationId`, `empresaId`, `usuarioId`, `cajaId`, `fondoInicial` y `fechaHora` opcional.
+- Tabla Airtable: `SESIONES_CAJA` por nombre, porque el Table ID real sigue pendiente en `docs/DATABASE.md`.
+- Campos usados: `empresa_id`, `usuario_id`, `caja_id`, `estado`, `fondo_inicial`, `fecha_apertura`, `operation_id_apertura`.
+- Reglas: valida payload, valida fondo inicial, evita duplicados por `operation_id_apertura`, bloquea segunda caja abierta para la misma empresa/usuario/caja y responde JSON con CORS en todas las ramas.
+- Estado productivo: no certificado; pendiente de importar y probar en n8n Cloud cuando existan ejecuciones disponibles.
 ## Estados validos
 
 - PENDIENTE

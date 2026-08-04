@@ -1,0 +1,529 @@
+{
+    "name":  "Caseritas POS - Abrir Caja",
+    "nodes":  [
+                  {
+                      "parameters":  {
+                                         "httpMethod":  "POST",
+                                         "path":  "caja/abrir",
+                                         "responseMode":  "responseNode",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "webhook-caja-abrir",
+                      "name":  "Webhook",
+                      "type":  "n8n-nodes-base.webhook",
+                      "typeVersion":  2,
+                      "position":  [
+                                       0,
+                                       0
+                                   ],
+                      "webhookId":  "caseritas-caja-abrir"
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const source = $json.body ?? $json;\nlet body = source;\n\nif (typeof body === \u0027string\u0027) {\n  try {\n    body = JSON.parse(body);\n  } catch (error) {\n    body = {};\n  }\n}\n\nconst operationId = String(body.operationId || \u0027\u0027).trim();\nconst empresaId = String(body.empresaId || \u0027\u0027).trim();\nconst usuarioId = String(body.usuarioId || \u0027\u0027).trim();\nconst cajaId = String(body.cajaId || \u0027\u0027).trim();\nconst hasFondoInicial = body.fondoInicial !== undefined \u0026\u0026 body.fondoInicial !== null \u0026\u0026 String(body.fondoInicial).trim() !== \u0027\u0027;\nconst fondoInicial = Number(body.fondoInicial);\n\nif (!operationId || !empresaId || !usuarioId || !cajaId || !hasFondoInicial) {\n  return [\n    {\n      json: {\n        ok: false,\n        error: \u0027INVALID_PAYLOAD\u0027,\n        message: \u0027Faltan datos obligatorios para abrir la caja\u0027\n      }\n    }\n  ];\n}\n\nif (!Number.isFinite(fondoInicial) || fondoInicial \u003c 0) {\n  return [\n    {\n      json: {\n        ok: false,\n        error: \u0027INVALID_OPENING_BALANCE\u0027,\n        message: \u0027El fondo inicial debe ser un importe valido\u0027\n      }\n    }\n  ];\n}\n\nconst inputDate = body.fechaHora ? new Date(body.fechaHora) : new Date();\nconst fechaHora = Number.isNaN(inputDate.getTime()) ? new Date().toISOString() : inputDate.toISOString();\nconst escapeFormula = (value) =\u003e String(value).replace(/\\\\/g, \u0027\\\\\\\\\u0027).replace(/\"/g, \u0027\\\\\"\u0027);\n\nreturn [\n  {\n    json: {\n      ok: true,\n      operationId,\n      empresaId,\n      usuarioId,\n      cajaId,\n      fondoInicial,\n      fechaHora,\n      operationFormula: `({operation_id_apertura} \u0026 \"\") = \"${escapeFormula(operationId)}\"`,\n      openFormula: `AND(({empresa_id} \u0026 \"\") = \"${escapeFormula(empresaId)}\", ({usuario_id} \u0026 \"\") = \"${escapeFormula(usuarioId)}\", ({caja_id} \u0026 \"\") = \"${escapeFormula(cajaId)}\", ({estado} \u0026 \"\") = \"ABIERTA\")`\n    }\n  }\n];"
+                                     },
+                      "id":  "validacion-caja-abrir",
+                      "name":  "Validacion",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       260,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.ok === true}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "if-payload-valido",
+                      "name":  "PayloadValido",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       520,
+                                       0
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "search",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "SESIONES_CAJA",
+                                                       "mode":  "name"
+                                                   },
+                                         "filterByFormula":  "={{$json.operationFormula}}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "buscar-operation-id",
+                      "name":  "BuscarOperationId",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       780,
+                                       -160
+                                   ],
+                      "alwaysOutputData":  true,
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const validation = $items(\u0027Validacion\u0027)[0]?.json || {};\n  const airtableItems = $items(\u0027BuscarOperationId\u0027);\n  const airtableError = airtableItems.find(item =\u003e item.json \u0026\u0026 (item.json.error || item.json.message) \u0026\u0026 !item.json.id);\n\n  if (airtableError) {\n    return [\n      {\n        json: {\n          ok: false,\n          decision: \u0027error\u0027,\n          error: \u0027CASH_OPEN_ERROR\u0027,\n          message: \u0027No se pudo abrir la caja\u0027\n        }\n      }\n    ];\n  }\n\n  const duplicate = airtableItems.find(item =\u003e item.json \u0026\u0026 item.json.id);\n\n  if (duplicate) {\n    const fields = duplicate.json.fields || duplicate.json;\n    return [\n      {\n        json: {\n          ok: true,\n          decision: \u0027duplicate\u0027,\n          cajaSesionId: duplicate.json.id,\n          operationId: validation.operationId,\n          estado: fields.estado || \u0027ABIERTA\u0027,\n          fondoInicial: Number(fields.fondo_inicial || validation.fondoInicial || 0),\n          fechaApertura: fields.fecha_apertura || validation.fechaHora,\n          idempotent: true\n        }\n      }\n    ];\n  }\n\n  return [\n    {\n      json: {\n        ...validation,\n        decision: \u0027continue\u0027\n      }\n    }\n  ];\n} catch (error) {\n  return [\n    {\n      json: {\n        ok: false,\n        decision: \u0027error\u0027,\n        error: \u0027CASH_OPEN_ERROR\u0027,\n        message: \u0027No se pudo abrir la caja\u0027\n      }\n    }\n  ];\n}"
+                                     },
+                      "id":  "decidir-duplicado",
+                      "name":  "DecidirDuplicado",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1040,
+                                       -160
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.decision === \"duplicate\"}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "if-es-duplicado",
+                      "name":  "EsDuplicado",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       1300,
+                                       "-160"
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "search",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "SESIONES_CAJA",
+                                                       "mode":  "name"
+                                                   },
+                                         "filterByFormula":  "={{$json.openFormula}}",
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "buscar-caja-abierta",
+                      "name":  "BuscarCajaAbierta",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       1560,
+                                       -260
+                                   ],
+                      "alwaysOutputData":  true,
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const data = $items(\u0027DecidirDuplicado\u0027)[0]?.json || {};\n  const airtableItems = $items(\u0027BuscarCajaAbierta\u0027);\n  const airtableError = airtableItems.find(item =\u003e item.json \u0026\u0026 (item.json.error || item.json.message) \u0026\u0026 !item.json.id);\n\n  if (airtableError) {\n    return [\n      {\n        json: {\n          ok: false,\n          decision: \u0027error\u0027,\n          error: \u0027CASH_OPEN_ERROR\u0027,\n          message: \u0027No se pudo abrir la caja\u0027\n        }\n      }\n    ];\n  }\n\n  const alreadyOpen = airtableItems.find(item =\u003e item.json \u0026\u0026 item.json.id);\n\n  if (alreadyOpen) {\n    return [\n      {\n        json: {\n          ok: false,\n          decision: \u0027already_open\u0027,\n          error: \u0027CASH_REGISTER_ALREADY_OPEN\u0027,\n          message: \u0027Ya existe una caja abierta para este usuario\u0027,\n          cajaSesionId: alreadyOpen.json.id\n        }\n      }\n    ];\n  }\n\n  return [\n    {\n      json: {\n        decision: \u0027create\u0027,\n        empresa_id: data.empresaId,\n        usuario_id: data.usuarioId,\n        caja_id: data.cajaId,\n        estado: \u0027ABIERTA\u0027,\n        fondo_inicial: data.fondoInicial,\n        fecha_apertura: data.fechaHora,\n        operation_id_apertura: data.operationId\n      }\n    }\n  ];\n} catch (error) {\n  return [\n    {\n      json: {\n        ok: false,\n        decision: \u0027error\u0027,\n        error: \u0027CASH_OPEN_ERROR\u0027,\n        message: \u0027No se pudo abrir la caja\u0027\n      }\n    }\n  ];\n}"
+                                     },
+                      "id":  "decidir-caja-abierta",
+                      "name":  "DecidirCajaAbierta",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1820,
+                                       -260
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "conditions":  {
+                                                            "boolean":  [
+                                                                            {
+                                                                                "value1":  "={{$json.decision === \"create\"}}",
+                                                                                "value2":  true
+                                                                            }
+                                                                        ]
+                                                        }
+                                     },
+                      "id":  "if-puede-crear",
+                      "name":  "PuedeCrear",
+                      "type":  "n8n-nodes-base.if",
+                      "typeVersion":  1,
+                      "position":  [
+                                       2080,
+                                       "-260"
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "operation":  "create",
+                                         "base":  {
+                                                      "__rl":  true,
+                                                      "value":  "appyWpTmIw3rZEcuW",
+                                                      "mode":  "id"
+                                                  },
+                                         "table":  {
+                                                       "__rl":  true,
+                                                       "value":  "SESIONES_CAJA",
+                                                       "mode":  "name"
+                                                   },
+                                         "columns":  {
+                                                         "mappingMode":  "autoMapInputData",
+                                                         "value":  {
+
+                                                                   }
+                                                     },
+                                         "options":  {
+
+                                                     }
+                                     },
+                      "id":  "crear-sesion",
+                      "name":  "CrearSesion",
+                      "type":  "n8n-nodes-base.airtable",
+                      "typeVersion":  2.1,
+                      "position":  [
+                                       2600,
+                                       -360
+                                   ],
+                      "continueOnFail":  true
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const validation = $items(\u0027Validacion\u0027)[0]?.json || {};\n\n  if ($json.error || !$json.id) {\n    return [\n      {\n        json: {\n          ok: false,\n          error: \u0027CASH_OPEN_ERROR\u0027,\n          message: \u0027No se pudo abrir la caja\u0027\n        }\n      }\n    ];\n  }\n\n  const fields = $json.fields || $json;\n\n  return [\n    {\n      json: {\n        ok: true,\n        cajaSesionId: $json.id,\n        operationId: validation.operationId,\n        estado: fields.estado || \u0027ABIERTA\u0027,\n        fondoInicial: Number(fields.fondo_inicial || validation.fondoInicial || 0),\n        fechaApertura: fields.fecha_apertura || validation.fechaHora,\n        idempotent: false\n      }\n    }\n  ];\n} catch (error) {\n  return [\n    {\n      json: {\n        ok: false,\n        error: \u0027CASH_OPEN_ERROR\u0027,\n        message: \u0027No se pudo abrir la caja\u0027\n      }\n    }\n  ];\n}"
+                                     },
+                      "id":  "normalizacion-caja-abrir",
+                      "name":  "Normalizacion",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       2860,
+                                       -360
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{$json}}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Methods",
+                                                                                                     "value":  "GET,POST,OPTIONS"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Headers",
+                                                                                                     "value":  "Content-Type, Authorization"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     },
+                      "id":  "respond-to-webhook",
+                      "name":  "Respond to Webhook",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       3120,
+                                       -160
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{$json}}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Methods",
+                                                                                                     "value":  "GET,POST,OPTIONS"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Headers",
+                                                                                                     "value":  "Content-Type, Authorization"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     },
+                      "id":  "respond-validacion",
+                      "name":  "Respond Validacion",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       780,
+                                       160
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{$json}}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Methods",
+                                                                                                     "value":  "GET,POST,OPTIONS"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Headers",
+                                                                                                     "value":  "Content-Type, Authorization"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     },
+                      "id":  "respond-duplicado",
+                      "name":  "Respond Idempotencia",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       1560,
+                                       40
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "respondWith":  "json",
+                                         "responseBody":  "={{$json}}",
+                                         "options":  {
+                                                         "responseHeaders":  {
+                                                                                 "entries":  [
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Origin",
+                                                                                                     "value":  "*"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Methods",
+                                                                                                     "value":  "GET,POST,OPTIONS"
+                                                                                                 },
+                                                                                                 {
+                                                                                                     "name":  "Access-Control-Allow-Headers",
+                                                                                                     "value":  "Content-Type, Authorization"
+                                                                                                 }
+                                                                                             ]
+                                                                             }
+                                                     }
+                                     },
+                      "id":  "respond-error",
+                      "name":  "Respond Error",
+                      "type":  "n8n-nodes-base.respondToWebhook",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       2340,
+                                       "-80"
+                                   ]
+                  },
+                  {
+                      "parameters":  {
+                                         "jsCode":  "const data = $json;\n\nreturn [\n  {\n    json: {\n      empresa_id: data.empresa_id,\n      usuario_id: data.usuario_id,\n      caja_id: data.caja_id,\n      estado: data.estado,\n      fondo_inicial: data.fondo_inicial,\n      fecha_apertura: data.fecha_apertura,\n      operation_id_apertura: data.operation_id_apertura\n    }\n  }\n];"
+                                     },
+                      "id":  "preparar-sesion",
+                      "name":  "PrepararSesion",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       2340,
+                                       -360
+                                   ]
+                  }
+              ],
+    "connections":  {
+                        "Webhook":  {
+                                        "main":  [
+                                                     [
+                                                         {
+                                                             "node":  "Validacion",
+                                                             "type":  "main",
+                                                             "index":  0
+                                                         }
+                                                     ]
+                                                 ]
+                                    },
+                        "Validacion":  {
+                                           "main":  [
+                                                        [
+                                                            {
+                                                                "node":  "PayloadValido",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ]
+                                                    ]
+                                       },
+                        "PayloadValido":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "BuscarOperationId",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ],
+                                                           [
+                                                               {
+                                                                   "node":  "Respond Validacion",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "BuscarOperationId":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "DecidirDuplicado",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "DecidirDuplicado":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "EsDuplicado",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "EsDuplicado":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "Respond Idempotencia",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ],
+                                                         [
+                                                             {
+                                                                 "node":  "BuscarCajaAbierta",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        },
+                        "BuscarCajaAbierta":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "DecidirCajaAbierta",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "DecidirCajaAbierta":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "PuedeCrear",
+                                                                        "type":  "main",
+                                                                        "index":  0
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "PuedeCrear":  {
+                                           "main":  [
+                                                        [
+                                                            {
+                                                                "node":  "PrepararSesion",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ],
+                                                        [
+                                                            {
+                                                                "node":  "Respond Error",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ]
+                                                    ]
+                                       },
+                        "CrearSesion":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "Normalizacion",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        },
+                        "Normalizacion":  {
+                                              "main":  [
+                                                           [
+                                                               {
+                                                                   "node":  "Respond to Webhook",
+                                                                   "type":  "main",
+                                                                   "index":  0
+                                                               }
+                                                           ]
+                                                       ]
+                                          },
+                        "PrepararSesion":  {
+                                               "main":  [
+                                                            {
+                                                                "node":  "CrearSesion",
+                                                                "type":  "main",
+                                                                "index":  0
+                                                            }
+                                                        ]
+                                           }
+                    },
+    "pinData":  {
+
+                },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "active":  false,
+    "versionId":  "caseritas-caja-abrir-iac-v1"
+}
